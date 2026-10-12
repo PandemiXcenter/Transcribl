@@ -1,8 +1,8 @@
 import pytest
 
-from article_translator.application.paragraphs import project_paragraphs
-from article_translator.domain.enums import BlockType, SegmentContinuation
-from article_translator.domain.models import TranslatedBlock
+from transcribl.application.paragraphs import project_paragraphs
+from transcribl.domain.enums import BlockType, SegmentContinuation
+from transcribl.domain.models import TranslatedBlock
 
 
 def _body(

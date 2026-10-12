@@ -7,20 +7,20 @@ from typing import cast
 import pytest
 from fastapi.testclient import TestClient
 
-from article_translator.adapters.secrets import DotenvSecretStore
-from article_translator.adapters.storage import FilesystemArtifactRepository
-from article_translator.application.editorial import EditorialService
-from article_translator.application.web_jobs import WebJobManager
-from article_translator.config import load_project_config
-from article_translator.domain.enums import (
+from transcribl.adapters.secrets import DotenvSecretStore
+from transcribl.adapters.storage import FilesystemArtifactRepository
+from transcribl.application.editorial import EditorialService
+from transcribl.application.web_jobs import WebJobManager
+from transcribl.config import load_project_config
+from transcribl.domain.enums import (
     BlockType,
     ExtractionStatus,
     ManualInsertionReason,
     SegmentContinuation,
     SegmentHandling,
 )
-from article_translator.domain.errors import PdfExportError
-from article_translator.domain.models import (
+from transcribl.domain.errors import PdfExportError
+from transcribl.domain.models import (
     ArtifactRef,
     DocumentTranslation,
     PageTranslation,
@@ -29,8 +29,8 @@ from article_translator.domain.models import (
     TranslationSettings,
     UncertainTerm,
 )
-from article_translator.hashing import sha256_file
-from article_translator.interfaces.web import create_app
+from transcribl.hashing import sha256_file
+from transcribl.interfaces.web import create_app
 
 HASH = "a" * 64
 RUN_ID = "1" * 32

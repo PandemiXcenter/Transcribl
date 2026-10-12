@@ -7,12 +7,12 @@ from typing import ClassVar, Self, cast
 import pytest
 from typer.testing import CliRunner
 
-import article_translator.cli as cli
-import article_translator.composition as composition
-import article_translator.executable as executable
-from article_translator.application.pipeline import TranslationPipeline
-from article_translator.config import ProjectConfig, load_project_config
-from article_translator.domain.models import (
+import transcribl.cli as cli
+import transcribl.composition as composition
+import transcribl.executable as executable
+from transcribl.application.pipeline import TranslationPipeline
+from transcribl.config import ProjectConfig, load_project_config
+from transcribl.domain.models import (
     DocumentTranslation,
     MarkdownExportSettings,
     TranslationSettings,
@@ -217,7 +217,7 @@ def test_frozen_entry_launches_workbench_without_arguments(
 ) -> None:
     launched: list[bool] = []
     monkeypatch.setattr(cli, "launch_app", lambda: launched.append(True))
-    monkeypatch.setattr(executable.sys, "argv", ["ArticleTranslator"])
+    monkeypatch.setattr(executable.sys, "argv", ["Transcribl"])
 
     executable.main()
 
@@ -229,11 +229,11 @@ def test_frozen_entry_retains_complete_cli_with_arguments(
 ) -> None:
     invocations: list[str] = []
     monkeypatch.setattr(cli, "app", lambda *, prog_name: invocations.append(prog_name))
-    monkeypatch.setattr(executable.sys, "argv", ["ArticleTranslator", "--help"])
+    monkeypatch.setattr(executable.sys, "argv", ["Transcribl", "--help"])
 
     executable.main()
 
-    assert invocations == ["ArticleTranslator"]
+    assert invocations == ["Transcribl"]
 
 
 @pytest.mark.parametrize(

@@ -1,5 +1,5 @@
 [project]
-name = "article-translator"
+name = "transcribl"
 version = "0.1.0"
 description = "Page-preserving, schema-validated PDF translation pipeline"
 readme = "README.md"
@@ -19,9 +19,9 @@ dependencies = [
 ]
 
 [project.scripts]
-article-translator = "article_translator.cli:app"
-app = "article_translator.cli:launch_app"
-compile = "article_translator.build_executable:main"
+transcribl = "transcribl.cli:app"
+app = "transcribl.cli:launch_app"
+compile = "transcribl.build_executable:main"
 
 [build-system]
 requires = ["uv_build>=0.9.21,<0.10.0"]
@@ -47,7 +47,7 @@ markers = [
 
 [tool.coverage.run]
 branch = true
-source = ["article_translator"]
+source = ["transcribl"]
 
 [tool.coverage.report]
 show_missing = true

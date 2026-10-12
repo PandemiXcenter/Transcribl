@@ -3,9 +3,9 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from article_translator.config import SecretSettings, load_project_config
-from article_translator.domain.enums import TranslationStyle, UncertaintyLevel
-from article_translator.domain.errors import ConfigurationError
+from transcribl.config import SecretSettings, load_project_config
+from transcribl.domain.enums import TranslationStyle, UncertaintyLevel
+from transcribl.domain.errors import ConfigurationError
 
 
 def test_default_toml_is_the_complete_non_secret_configuration() -> None:

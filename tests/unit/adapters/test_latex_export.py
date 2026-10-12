@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-import article_translator.adapters.export.latex as latex_adapter
-from article_translator.adapters.export import LatexPdfCompiler
-from article_translator.domain.errors import PdfExportError
+import transcribl.adapters.export.latex as latex_adapter
+from transcribl.adapters.export import LatexPdfCompiler
+from transcribl.domain.errors import PdfExportError
 
 
 def test_latex_compiler_uses_bounded_no_shell_escape_process(

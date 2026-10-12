@@ -5,16 +5,16 @@ from typing import Any
 import pytest
 from google.genai import errors, types
 
-from article_translator.adapters.llm.gemini import GeminiPageTranslator, GeminiRequestError
-from article_translator.domain.enums import BlockType, SegmentContinuation
-from article_translator.domain.models import (
+from transcribl.adapters.llm.gemini import GeminiPageTranslator, GeminiRequestError
+from transcribl.domain.enums import BlockType, SegmentContinuation
+from transcribl.domain.models import (
     GeneratedBlock,
     GeneratedPagePayload,
     GeneratedTableMarkdown,
     GeneratedTablePayload,
     TranslationSettings,
 )
-from article_translator.ports.translation import (
+from transcribl.ports.translation import (
     PageTranslationRequest,
     TableReconstructionRequest,
 )

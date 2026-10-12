@@ -1,8 +1,8 @@
 from datetime import UTC, datetime
 
-from article_translator.application.export_reviewed import compile_latex, compile_text
-from article_translator.domain.enums import BlockType, ExtractionStatus, SegmentContinuation
-from article_translator.domain.models import (
+from transcribl.application.export_reviewed import compile_latex, compile_text
+from transcribl.domain.enums import BlockType, ExtractionStatus, SegmentContinuation
+from transcribl.domain.models import (
     ArtifactRef,
     DocumentTranslation,
     MarkdownExportSettings,

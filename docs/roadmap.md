@@ -1,6 +1,6 @@
 # Roadmap
 
-ArticleTranslator now has a working backend, immutable editorial layer, and a
+Transcribl now has a working backend, immutable editorial layer, and a
 minimal local FastAPI workbench. The remaining roadmap hardens those components
 without presenting the current loopback tool as a production, remote, or
 multi-user service.

@@ -1,6 +1,6 @@
 # Native executable packaging
 
-ArticleTranslator uses PyInstaller to build one native executable containing the
+Transcribl uses PyInstaller to build one native executable containing the
 Python runtime, application modules, local web assets, prompt resources,
 MarkItDown, Magika data, and PDFium binaries. PyInstaller is managed in the uv
 development dependency group; do not install or invoke it outside uv.
@@ -39,9 +39,9 @@ are required.
 The output is:
 
 ```text
-dist/windows/ArticleTranslator.exe
-dist/mac/ArticleTranslator
-dist/linux/ArticleTranslator
+dist/windows/Transcribl.exe
+dist/mac/Transcribl
+dist/linux/Transcribl
 ```
 
 `build/pyinstaller/<platform>/` contains disposable intermediate analysis and
@@ -53,7 +53,7 @@ Running the executable without arguments starts the same loopback FastAPI
 workbench as `uv run app`:
 
 ```bash
-./dist/mac/ArticleTranslator
+./dist/mac/Transcribl
 ```
 
 After the server is ready, the launcher opens the configured loopback URL in the
@@ -64,9 +64,9 @@ browser does not stop the server; its URL can still be opened manually.
 Passing arguments exposes the complete existing CLI through the same file:
 
 ```bash
-./dist/mac/ArticleTranslator --help
-./dist/mac/ArticleTranslator run /path/to/article.pdf
-./dist/mac/ArticleTranslator serve
+./dist/mac/Transcribl --help
+./dist/mac/Transcribl run /path/to/article.pdf
+./dist/mac/Transcribl serve
 ```
 
 The bundled `config/default.toml` is refreshed into an app-owned per-user data
@@ -75,9 +75,17 @@ that directory for durable overrides; the application never overwrites the
 personal file. Artifacts and the narrow `.env` containing only `GEMINI_API_KEY`
 remain in the same persistent application-data root:
 
-- Windows: `%LOCALAPPDATA%\ArticleTranslator`
-- macOS: `~/Library/Application Support/ArticleTranslator`
-- Linux: `${XDG_DATA_HOME:-~/.local/share}/article-translator`
+- Windows: `%LOCALAPPDATA%\Transcribl`
+- macOS: `~/Library/Application Support/Transcribl`
+- Linux: `${XDG_DATA_HOME:-~/.local/share}/transcribl`
+
+When upgrading from a differently named executable, close both versions and copy
+your existing `config/personal.local.toml`, `.env`, and artifact directory into
+the corresponding Transcribl application-data root. Update any absolute paths
+in your personal TOML. The renamed executable uses the new directory; it does
+not move or delete data from the previous location. Repository launches continue
+to use the local configuration and artifact paths, including after renaming the
+checkout folder.
 
 The one-file executable extracts its bundled runtime into a temporary directory
 while running, as PyInstaller one-file applications normally do. Canonical jobs,
@@ -97,7 +105,7 @@ bounded and preserves the existing constrained XeLaTeX adapter.
 
 After each native build, verify at minimum:
 
-1. `ArticleTranslator --help` starts without an import error.
+1. `Transcribl --help` starts without an import error.
 2. Running without arguments serves `GET /` and `/api/config` on the configured
    loopback address.
 3. A small synthetic PDF can be prepared without contacting Gemini.

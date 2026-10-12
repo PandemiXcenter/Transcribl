@@ -5,11 +5,11 @@ from pathlib import Path
 import pytest
 from pydantic import SecretStr
 
-from article_translator.adapters.secrets import (
+from transcribl.adapters.secrets import (
     DotenvSecretStore,
     InvalidSecretValueError,
 )
-from article_translator.config import SecretSettings
+from transcribl.config import SecretSettings
 
 
 def test_missing_store_has_no_key_and_clear_is_a_noop(tmp_path: Path) -> None:

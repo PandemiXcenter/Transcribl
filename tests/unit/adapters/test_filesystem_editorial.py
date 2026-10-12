@@ -5,17 +5,17 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from article_translator.adapters.storage.filesystem import FilesystemArtifactRepository
-from article_translator.domain.editorial import BlockRevision, ReviewPosition
-from article_translator.domain.enums import (
+from transcribl.adapters.storage.filesystem import FilesystemArtifactRepository
+from transcribl.domain.editorial import BlockRevision, ReviewPosition
+from transcribl.domain.enums import (
     BlockType,
     ExtractionStatus,
     ManualInsertionReason,
     SegmentContinuation,
     SegmentHandling,
 )
-from article_translator.domain.errors import ArtifactError
-from article_translator.domain.models import (
+from transcribl.domain.errors import ArtifactError
+from transcribl.domain.models import (
     ArtifactRef,
     DocumentTranslation,
     FootnoteDescription,

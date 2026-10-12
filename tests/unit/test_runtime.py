@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-import article_translator.runtime as runtime
+import transcribl.runtime as runtime
 
 
 def test_application_data_directory_uses_native_user_locations() -> None:
@@ -14,18 +14,18 @@ def test_application_data_directory_uses_native_user_locations() -> None:
             environment={},
             home=home,
         )
-        == home / "Library" / "Application Support" / "ArticleTranslator"
+        == home / "Library" / "Application Support" / "Transcribl"
     )
     assert runtime.application_data_directory(
         current_platform="win32",
         environment={"LOCALAPPDATA": "C:/Users/colleague/AppData/Local"},
         home=home,
-    ) == Path("C:/Users/colleague/AppData/Local/ArticleTranslator")
+    ) == Path("C:/Users/colleague/AppData/Local/Transcribl")
     assert runtime.application_data_directory(
         current_platform="linux",
         environment={"XDG_DATA_HOME": "/users/colleague/.data"},
         home=home,
-    ) == Path("/users/colleague/.data/article-translator")
+    ) == Path("/users/colleague/.data/transcribl")
 
 
 def test_repository_runtime_paths_remain_relative_to_working_directory(

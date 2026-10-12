@@ -7,8 +7,8 @@ from markitdown import MarkItDown
 from pypdf import PdfWriter
 from pypdf.constants import PageLabelStyle
 
-from article_translator.adapters.extraction import MarkItDownPageExtractor
-from article_translator.domain.enums import ExtractionStatus
+from transcribl.adapters.extraction import MarkItDownPageExtractor
+from transcribl.domain.enums import ExtractionStatus
 
 
 @pytest.mark.integration

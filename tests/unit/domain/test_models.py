@@ -3,8 +3,8 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
-from article_translator.domain.editorial import BlockRevision
-from article_translator.domain.enums import (
+from transcribl.domain.editorial import BlockRevision
+from transcribl.domain.enums import (
     BlockType,
     ExtractionStatus,
     ManualInsertionReason,
@@ -12,7 +12,7 @@ from article_translator.domain.enums import (
     SegmentHandling,
     UncertaintyLevel,
 )
-from article_translator.domain.models import (
+from transcribl.domain.models import (
     ArtifactRef,
     DocumentTranslation,
     FootnoteDescription,

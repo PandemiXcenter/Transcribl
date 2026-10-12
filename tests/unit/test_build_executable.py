@@ -4,7 +4,7 @@ from tomllib import load
 
 import pytest
 
-from article_translator.build_executable import (
+from transcribl.build_executable import (
     BuildTarget,
     ExecutableBuildError,
     build_executable,
@@ -15,10 +15,10 @@ from article_translator.build_executable import (
 
 def _project_root(tmp_path: Path) -> Path:
     root = tmp_path / "project"
-    (root / "src" / "article_translator").mkdir(parents=True)
+    (root / "src" / "transcribl").mkdir(parents=True)
     (root / "config").mkdir()
     (root / "pyproject.toml").write_text("[project]\nname='test'\n", encoding="utf-8")
-    (root / "src" / "article_translator" / "executable.py").write_text(
+    (root / "src" / "transcribl" / "executable.py").write_text(
         "def main(): pass\n",
         encoding="utf-8",
     )
@@ -48,17 +48,18 @@ def test_build_command_uses_single_file_resources_and_native_runtime(tmp_path: P
         runner=calls.append,
     )
 
-    assert output == root / "dist" / "mac" / "ArticleTranslator"
+    assert output == root / "dist" / "mac" / "Transcribl"
     arguments = calls[0]
     assert "--onefile" in arguments
+    assert arguments[arguments.index("--name") + 1] == "Transcribl"
     assert "--clean" not in arguments
     assert "--collect-data" in arguments
-    assert "article_translator" in arguments
+    assert "transcribl" in arguments
     assert "markitdown" in arguments
     assert "magika" in arguments
     assert "pypdfium2" in arguments
     assert f"{root / 'config' / 'default.toml'}{os.pathsep}config" in arguments
-    assert arguments[-1] == str(root / "src" / "article_translator" / "executable.py")
+    assert arguments[-1] == str(root / "src" / "transcribl" / "executable.py")
 
 
 def test_clean_build_removes_only_generated_target_and_never_bundles_private_data(
@@ -127,4 +128,7 @@ def test_uv_compile_entrypoint_is_declared() -> None:
     with Path("pyproject.toml").open("rb") as handle:
         project = load(handle)
 
-    assert project["project"]["scripts"]["compile"] == ("article_translator.build_executable:main")
+    assert project["project"]["scripts"]["compile"] == ("transcribl.build_executable:main")
+    assert project["project"]["name"] == "transcribl"
+    assert project["project"]["scripts"]["transcribl"] == "transcribl.cli:app"
+    assert project["project"]["scripts"]["app"] == "transcribl.cli:launch_app"

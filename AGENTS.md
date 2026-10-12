@@ -4,7 +4,7 @@ These instructions apply to the entire repository.
 
 ## Mission and current scope
 
-ArticleTranslator is a page-preserving PDF translation pipeline with a local
+Transcribl is a page-preserving PDF translation pipeline with a local
 FastAPI workbench for colleagues. The active architecture is:
 
 ```text
@@ -46,51 +46,51 @@ Files in `data/` are local user inputs, not disposable fixtures.
 config/default.toml
     Complete checked-in non-secret configuration.
 
-src/article_translator/domain/
+src/transcribl/domain/
     Pydantic models, enums, errors, machine schema, editorial revisions/review
     projections.
     Imports only the standard library and Pydantic.
 
-src/article_translator/ports/
+src/transcribl/ports/
     Provider, extraction, artifact, and editorial-revision Protocols. No SDK or
     web implementations.
 
-src/article_translator/application/
+src/transcribl/application/
     Provider-neutral orchestration, prompt assembly, fingerprints, local job
     lifecycle, editorial commands/queries, and exporters.
     Depends on domain and ports, never concrete infrastructure.
 
-src/article_translator/adapters/extraction/
+src/transcribl/adapters/extraction/
     pypdf page splitting, MarkItDown conversion, PDFium rendering.
 
-src/article_translator/adapters/export/
+src/transcribl/adapters/export/
     Narrow local XeLaTeX compilation. Generated content remains escaped and
     shell escape remains disabled.
 
-src/article_translator/adapters/llm/
+src/transcribl/adapters/llm/
     Gemini SDK boundary. Google SDK types must not escape this package.
 
-src/article_translator/adapters/storage/
+src/transcribl/adapters/storage/
     Filesystem machine-artifact and append-only revision implementation.
 
-src/article_translator/adapters/secrets/
+src/transcribl/adapters/secrets/
     Narrow local `GEMINI_API_KEY` persistence. No other setting or secret.
 
-src/article_translator/prompts/
+src/transcribl/prompts/
     Versioned prompt resources. Prompt behavior is part of cache identity.
 
-src/article_translator/interfaces/web/
+src/transcribl/interfaces/web/
     FastAPI transport, strict request schemas, and small static colleague UI.
     Calls application services; owns HTTP/CSRF/upload/presentation concerns.
 
-src/article_translator/composition.py
+src/transcribl/composition.py
     Shared wiring for CLI and web entry points.
 
-src/article_translator/cli.py
+src/transcribl/cli.py
     Command inputs plus `serve` and the zero-argument `uv run app` entry points.
     No pipeline/business rules.
 
-src/article_translator/build_executable.py, executable.py, runtime.py
+src/transcribl/build_executable.py, executable.py, runtime.py
     Native PyInstaller build orchestration, frozen entry dispatch, and persistent
     per-user runtime paths. No pipeline/business rules.
 

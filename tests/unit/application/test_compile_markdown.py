@@ -1,14 +1,14 @@
 from datetime import UTC, datetime
 
-from article_translator.application.compile_markdown import compile_markdown
-from article_translator.domain.enums import (
+from transcribl.application.compile_markdown import compile_markdown
+from transcribl.domain.enums import (
     BlockType,
     ExtractionStatus,
     ManualInsertionReason,
     SegmentContinuation,
     SegmentHandling,
 )
-from article_translator.domain.models import (
+from transcribl.domain.models import (
     ArtifactRef,
     DocumentTranslation,
     FootnoteDescription,

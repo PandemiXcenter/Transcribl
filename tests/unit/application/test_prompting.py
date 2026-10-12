@@ -1,10 +1,10 @@
-from article_translator.application.prompting import (
+from transcribl.application.prompting import (
     PROMPT_VERSION,
     TABLE_PROMPT_VERSION,
     build_page_prompt,
     build_table_prompt,
 )
-from article_translator.domain.enums import (
+from transcribl.domain.enums import (
     BlockType,
     ExtractionStatus,
     ManualInsertionReason,
@@ -13,7 +13,7 @@ from article_translator.domain.enums import (
     TranslationStyle,
     UncertaintyLevel,
 )
-from article_translator.domain.models import (
+from transcribl.domain.models import (
     ArtifactRef,
     PageTranslation,
     ProviderMetadata,

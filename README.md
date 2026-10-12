@@ -1,6 +1,6 @@
-# ArticleTranslator
+# Transcribl
 
-ArticleTranslator is a local tool for translating and reviewing page-preserving
+Transcribl is a local tool for translating and reviewing page-preserving
 PDFs. It turns each physical page into matched Markdown and an image, sends a
 structured multimodal page-translation request, conditionally follows it with a
 dedicated table-reconstruction request, validates both responses with Pydantic,
@@ -112,6 +112,9 @@ and developer tools.
 uv sync --all-groups
 cp config/default.toml config/personal.local.toml
 ```
+
+After moving or renaming the checkout folder, run `uv sync --all-groups
+--reinstall` from its new location to refresh editable imports and script paths.
 
 Start the local interface. The launcher uses `config/personal.local.toml` when it
 exists and otherwise uses the complete checked-in `config/default.toml`:
@@ -238,7 +241,7 @@ GEMINI_API_KEY=your-key-here
 Validate the selected non-secret TOML configuration:
 
 ```bash
-uv run article-translator \
+uv run transcribl \
   --config config/personal.local.toml \
   show-config
 ```
@@ -246,7 +249,7 @@ uv run article-translator \
 Run the full backend pipeline:
 
 ```bash
-uv run article-translator \
+uv run transcribl \
   --config config/personal.local.toml \
   run data/article.pdf
 ```
@@ -264,15 +267,15 @@ The full run can be split into independently inspectable stages:
 
 ```bash
 # No external API call
-uv run article-translator --config config/personal.local.toml \
+uv run transcribl --config config/personal.local.toml \
   ingest data/article.pdf
 
 # Uses GEMINI_API_KEY and resumes matching checkpoints
-uv run article-translator --config config/personal.local.toml \
+uv run transcribl --config config/personal.local.toml \
   translate <configured-artifacts-dir>/<job-id>
 
 # No external API call; regenerates LaTeX and Markdown from canonical JSON
-uv run article-translator --config config/personal.local.toml \
+uv run transcribl --config config/personal.local.toml \
   compile <configured-artifacts-dir>/<job-id>
 ```
 
@@ -437,7 +440,7 @@ rather than being attached to a guessed run.
 ├── docs/
 │   ├── architecture.md             # boundaries, contracts, artifact lifecycle
 │   └── roadmap.md                  # backend, editorial, and UI phases
-├── src/article_translator/
+├── src/transcribl/
 │   ├── cli.py                      # command inputs and local app launchers
 │   ├── composition.py              # shared adapter/application wiring
 │   ├── config.py                   # TOML validation + API-key loading

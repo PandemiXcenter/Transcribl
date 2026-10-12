@@ -2,22 +2,22 @@ from pathlib import Path
 
 import pytest
 
-import article_translator.application.pipeline as pipeline_module
-from article_translator.adapters.storage import FilesystemArtifactRepository
-from article_translator.application.pipeline import TranslationPipeline
-from article_translator.domain.enums import (
+import transcribl.application.pipeline as pipeline_module
+from transcribl.adapters.storage import FilesystemArtifactRepository
+from transcribl.application.pipeline import TranslationPipeline
+from transcribl.domain.enums import (
     BlockType,
     ExtractionStatus,
     ManualInsertionReason,
     SegmentContinuation,
     SegmentHandling,
 )
-from article_translator.domain.errors import (
+from transcribl.domain.errors import (
     IncompleteDocumentError,
     PageTranslationError,
     StaleCheckpointError,
 )
-from article_translator.domain.models import (
+from transcribl.domain.models import (
     ArtifactRef,
     FootnoteDescription,
     FootnoteIdentity,
@@ -31,8 +31,8 @@ from article_translator.domain.models import (
     PreparedPage,
     TranslationSettings,
 )
-from article_translator.hashing import sha256_file
-from article_translator.ports.translation import (
+from transcribl.hashing import sha256_file
+from transcribl.ports.translation import (
     PageTranslationRequest,
     ProviderDescriptor,
     ProviderResult,

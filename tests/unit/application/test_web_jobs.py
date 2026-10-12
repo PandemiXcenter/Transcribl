@@ -10,33 +10,33 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
-from article_translator.adapters.secrets import DotenvSecretStore
-from article_translator.adapters.storage import FilesystemArtifactRepository
-from article_translator.application.editorial import EditorialService
-from article_translator.application.pipeline import TranslationPipeline
-from article_translator.application.web_jobs import (
+from transcribl.adapters.secrets import DotenvSecretStore
+from transcribl.adapters.storage import FilesystemArtifactRepository
+from transcribl.application.editorial import EditorialService
+from transcribl.application.pipeline import TranslationPipeline
+from transcribl.application.web_jobs import (
     WebJobManager,
     WebJobNotFoundError,
     WebJobStatus,
 )
-from article_translator.config import ProjectConfig, load_project_config
-from article_translator.domain.editorial import ReviewPosition
-from article_translator.domain.enums import (
+from transcribl.config import ProjectConfig, load_project_config
+from transcribl.domain.editorial import ReviewPosition
+from transcribl.domain.enums import (
     BlockType,
     ExtractionStatus,
     ReviewStatus,
     SegmentContinuation,
 )
-from article_translator.domain.models import (
+from transcribl.domain.models import (
     ArtifactRef,
     DocumentTranslation,
     GeneratedBlock,
     GeneratedPagePayload,
     PreparedPage,
 )
-from article_translator.hashing import sha256_file
-from article_translator.interfaces.web import create_app
-from article_translator.ports.translation import (
+from transcribl.hashing import sha256_file
+from transcribl.interfaces.web import create_app
+from transcribl.ports.translation import (
     PageTranslationRequest,
     PageTranslator,
     ProviderDescriptor,

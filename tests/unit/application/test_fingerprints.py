@@ -1,7 +1,7 @@
 import pytest
 
-import article_translator.application.fingerprints as fingerprints
-from article_translator.domain.enums import (
+import transcribl.application.fingerprints as fingerprints
+from transcribl.domain.enums import (
     BlockType,
     ExtractionStatus,
     ManualInsertionReason,
@@ -9,13 +9,13 @@ from article_translator.domain.enums import (
     SegmentHandling,
     UncertaintyLevel,
 )
-from article_translator.domain.models import (
+from transcribl.domain.models import (
     ArtifactRef,
     PreparedPage,
     TranslatedBlock,
     TranslationSettings,
 )
-from article_translator.ports.translation import ProviderDescriptor
+from transcribl.ports.translation import ProviderDescriptor
 
 HASH = "a" * 64
 

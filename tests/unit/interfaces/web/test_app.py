@@ -11,16 +11,16 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
-from article_translator.adapters.secrets import DotenvSecretStore
-from article_translator.application.web_jobs import (
+from transcribl.adapters.secrets import DotenvSecretStore
+from transcribl.application.web_jobs import (
     WebJobManager,
     WebJobNotFoundError,
     WebJobSnapshot,
     WebJobStatus,
     WebReviewSnapshot,
 )
-from article_translator.config import ProjectConfig, load_project_config
-from article_translator.interfaces.web import create_app
+from transcribl.config import ProjectConfig, load_project_config
+from transcribl.interfaces.web import create_app
 
 
 class RecordingJobManager:
@@ -157,7 +157,9 @@ def test_index_and_public_config_never_expose_secret(tmp_path: Path) -> None:
         public_config = client.get("/api/config")
 
     assert index.status_code == 200
-    assert "ArticleTranslator" in index.text
+    assert app.title == "Transcribl"
+    assert "<title>Transcribl</title>" in index.text
+    assert 'aria-label="Transcribl home"' in index.text
     assert "Bring an old text into clear view" not in index.text
     for expected_control in (
         'data-tab="translate"',

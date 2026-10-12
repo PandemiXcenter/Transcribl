@@ -1,8 +1,8 @@
 import pytest
 from pydantic import ValidationError
 
-from article_translator.domain.enums import ExtractionStatus
-from article_translator.domain.models import ArtifactRef, JobManifest, PreparedPage
+from transcribl.domain.enums import ExtractionStatus
+from transcribl.domain.models import ArtifactRef, JobManifest, PreparedPage
 
 HASH = "a" * 64
 RUN_ID = "1" * 32
