@@ -1,0 +1,26 @@
+body { background: #f4f5f5; color: #242c32; }
+.nicegui-content { padding: 0; gap: 0; }
+.workbench-header { background: #fff; color: #27383f; border-bottom: 1px solid #dce2e4; box-shadow: none; }
+.workbench-title { font-size: 17px; font-weight: 650; letter-spacing: -.3px; margin-right: 30px; }
+.workbench-tabs { color: #5b686e; }
+.workbench-tabs .q-tab { min-height: 54px; padding: 0 22px; text-transform: none; }
+.workbench-body { width: 100%; padding: 28px 36px; }
+.workbench-section { max-width: 1000px; margin: 0 auto; width: 100%; gap: 20px; }
+.workbench-card { width: 100%; background: white; box-shadow: none; border: 1px solid #dce2e4; border-radius: 8px; padding: 24px; }
+.workbench-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; width: 100%; }
+.workbench-grid .q-field { width: 100%; }
+.workbench-subtle { font-size: 12px; color: #637178; }
+.workbench-title-small { font-size: 19px; font-weight: 600; }
+.workbench-upload { width: 100%; box-shadow: none; border: 1px dashed #a7b5bb; cursor: pointer; }
+.workbench-upload:focus-visible { outline: 2px solid #365e70; outline-offset: 3px; }
+.workbench-upload .q-uploader__header { background: #edf2f3; color: #33484f; }
+.glossary-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; width: 100%; align-items: center; }
+.research-editor { --canvas: #f4f5f5; --accent: #365e70; --accent-dark: #234757; --line: #dce2e4; --surface-subtle: #f6f8f8; min-height: 0; background: transparent; width: 100%; }
+.research-editor .tab-panel { padding: 0; max-width: none; }
+.research-editor .review-grid { height: calc(100vh - 205px); min-height: 400px; }
+.research-editor .review-pane { border-radius: 6px; }
+.research-editor .document-scroll { height: 100%; }
+.research-editor .panel-header h1, .research-editor .review-toolbar h1 { font-size: 20px; }
+.research-editor .review-toolbar { margin-bottom: 12px; }
+.research-editor .review-list-card { border-radius: 6px; box-shadow: none; }
+@media (max-width: 850px) { .workbench-body {padding: 20px;} .workbench-grid {grid-template-columns: 1fr;} }

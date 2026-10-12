@@ -1,0 +1,62 @@
+name: Desktop builds
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  desktop:
+    name: ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            target: macos-arm64
+            executable: dist/Transcribl.app/Contents/MacOS/Transcribl
+          - runner: windows-2025
+            target: windows-x64
+            executable: dist/Transcribl/Transcribl.exe
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Install locked environment
+        run: uv sync --locked --all-groups
+      - name: Quality gates
+        run: |
+          uv run ruff format --check .
+          uv run ruff check .
+          uv run python -m mypy src tests
+          uv run python -m pytest
+          uv lock --check
+      - name: Build desktop distribution
+        run: uv run pyinstaller --noconfirm --clean .github/packaging/transcribl.spec
+      - name: Smoke-test packaged CLI, extraction and NiceGUI server
+        run: uv run python .github/packaging/smoke.py "${{ matrix.executable }}"
+      - name: Archive macOS app
+        if: runner.os == 'macOS'
+        run: ditto -c -k --sequesterRsrc --keepParent dist/Transcribl.app dist/Transcribl-macos-arm64.zip
+      - name: Archive Windows app
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path dist/Transcribl -DestinationPath dist/Transcribl-windows-x64.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Transcribl-${{ matrix.target }}
+          path: dist/Transcribl-${{ matrix.target }}.zip
+          if-no-files-found: error
+          retention-days: 14

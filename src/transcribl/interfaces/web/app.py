@@ -6,14 +6,13 @@ import shutil
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import asdict, dataclass, field
-from importlib.resources import files
 from pathlib import Path
 from typing import Annotated
 from uuid import uuid4
 
 from fastapi import Cookie, FastAPI, File, Form, Header, HTTPException, Query, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import SecretStr, ValidationError
 from starlette.middleware.base import RequestResponseEndpoint
 
@@ -21,21 +20,30 @@ from transcribl.adapters.export import LatexPdfCompiler
 from transcribl.adapters.secrets import DotenvSecretStore
 from transcribl.adapters.storage import FilesystemArtifactRepository
 from transcribl.adapters.storage.glossaries import FilesystemGlossaryRepository
+from transcribl.adapters.storage.preferences import FilesystemPreferencesRepository
 from transcribl.application.editorial import EditorialService
 from transcribl.application.glossaries import GlossaryService
+from transcribl.application.prompting import prompt_templates
 from transcribl.application.web_jobs import (
     WebJobManager,
     WebJobNotFoundError,
     WebJobNotReadyError,
 )
+from transcribl.application.workbench_settings import WorkbenchSettingsService
 from transcribl.composition import build_pipeline, provider_translator
-from transcribl.config import ProjectConfig, ProviderName, SecretSettings
+from transcribl.config import (
+    ProjectConfig,
+    ProviderName,
+    SecretSettings,
+    resolve_workbench_preferences,
+    workbench_defaults,
+)
 from transcribl.domain.editorial import (
     ReviewDocument,
     UncertaintyFallback,
     UncertaintyHighlight,
 )
-from transcribl.domain.enums import UncertaintyLevel
+from transcribl.domain.enums import TranslationStyle, UncertaintyLevel
 from transcribl.domain.errors import (
     ArtifactError,
     EditorialError,
@@ -53,6 +61,7 @@ from transcribl.domain.glossaries import (
     GlossaryStorageError,
 )
 from transcribl.domain.models import DocumentTranslation
+from transcribl.domain.preferences import PreferencesConflictError, PreferencesStorageError
 from transcribl.interfaces.web.schemas import (
     ApiKeySettingsRequest,
     BlockRevisionRequest,
@@ -62,13 +71,10 @@ from transcribl.interfaces.web.schemas import (
     ParagraphRevisionRequest,
     ReviewPositionRequest,
     UncertaintyReplacementRequest,
+    WorkbenchSettingsRequest,
 )
 from transcribl.ports.export import PdfCompiler
 from transcribl.runtime import default_secret_path
-
-
-def _asset(name: str) -> str:
-    return files("transcribl.interfaces.web").joinpath("static", name).read_text(encoding="utf-8")
 
 
 def create_app(
@@ -97,6 +103,9 @@ def create_app(
         max_entries=config.web.max_glossary_entries,
         max_term_characters=config.web.max_term_characters,
         max_name_characters=config.web.max_glossary_name_characters,
+    )
+    settings_service = WorkbenchSettingsService(
+        config, FilesystemPreferencesRepository(config.paths.artifacts_dir)
     )
     local_pdf_compiler = pdf_compiler or LatexPdfCompiler(
         engine=config.pdf_export.latex_engine,
@@ -131,9 +140,10 @@ def create_app(
         response.headers["Referrer-Policy"] = "no-referrer"
         return response
 
-    @app.get("/", response_class=HTMLResponse)
-    def index() -> HTMLResponse:
-        response = HTMLResponse(_asset("index.html"))
+    @app.get("/")
+    @app.get("/session")
+    def session() -> JSONResponse:
+        response = JSONResponse({"application": "Transcribl"})
         response.set_cookie(
             "at_csrf",
             secrets.token_urlsafe(32),
@@ -143,21 +153,22 @@ def create_app(
         )
         return response
 
-    @app.get("/assets/styles.css")
-    def styles() -> Response:
-        return Response(_asset("styles.css"), media_type="text/css")
-
-    @app.get("/assets/app.js")
-    def javascript() -> Response:
-        return Response(_asset("app.js"), media_type="text/javascript")
-
     @app.get("/api/config")
     def public_config() -> dict[str, object]:
+        saved = settings_service.read()
+        effective = resolve_workbench_preferences(config, saved.values)
         return {
-            "translation": config.translation.model_dump(mode="json"),
+            "translation": effective.translation.model_dump(mode="json"),
+            "preferences": saved.model_dump(mode="json"),
+            "settings_defaults": workbench_defaults(config).model_dump(mode="json"),
+            "thinking_choices": {
+                name: config.provider.settings_for(name).thinking_level_choices
+                for name in ("gemini", "openai", "anthropic")
+            },
+            "prompts": prompt_templates(),
             "provider": {
-                "name": config.provider.name,
-                "model": config.provider.selected.model,
+                "name": effective.provider.name,
+                "model": effective.provider.selected.model,
                 "selectable_models": [
                     model
                     for name in ("gemini", "openai", "anthropic")
@@ -174,9 +185,9 @@ def create_app(
                 name: _api_key_status(local_secret_store, name)
                 for name in ("gemini", "openai", "anthropic")
             },
-            "extraction": config.extraction.model_dump(mode="json"),
+            "extraction": effective.extraction.model_dump(mode="json"),
             "automation": {
-                "auto_continue_default": config.web.auto_continue_default,
+                "auto_continue_default": effective.web.auto_continue_default,
                 "auto_continue_attempts": config.web.auto_continue_attempts,
             },
             "review": {
@@ -200,6 +211,28 @@ def create_app(
                 "status_poll_interval_ms": config.web.status_poll_interval_ms,
             },
         }
+
+    @app.put("/api/settings")
+    def save_workbench_settings(
+        command: WorkbenchSettingsRequest,
+        at_csrf: Annotated[str | None, Cookie()] = None,
+        x_csrf_token: Annotated[str | None, Header()] = None,
+    ) -> dict[str, object]:
+        _require_csrf(at_csrf, x_csrf_token)
+        if command.values.default_glossary not in {"none", "configured"} and not any(
+            g.glossary_id == command.values.default_glossary
+            for g in glossary_service.list_glossaries()
+        ):
+            raise HTTPException(status_code=422, detail="Select an existing default glossary")
+        if command.values.default_glossary == "configured" and not config.translation.glossary:
+            raise HTTPException(status_code=422, detail="No configured glossary is available")
+        try:
+            settings_service.save(command.values, expected_revision=command.expected_revision)
+        except (PreferencesConflictError, PreferencesStorageError):
+            raise
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from None
+        return public_config()
 
     @app.get("/api/glossaries")
     def list_glossaries() -> dict[str, object]:
@@ -285,8 +318,33 @@ def create_app(
     ) -> JSONResponse:
         _require_csrf(at_csrf, x_csrf_token)
         resolved_glossary = _parse_glossary(glossary, config)
-        runtime_config, auto_continue = _parse_job_settings(settings, config)
-        if glossary_id:
+        runtime_config, auto_continue = _parse_job_settings(settings, settings_service.resolved())
+        if glossary_id is None and not resolved_glossary:
+            default_glossary = runtime_config.workbench.default_glossary
+            if default_glossary == "none":
+                glossary_id = "none"
+            elif default_glossary != "configured":
+                selected = next(
+                    (
+                        g
+                        for g in glossary_service.list_glossaries()
+                        if g.glossary_id == default_glossary
+                    ),
+                    None,
+                )
+                if selected is None:
+                    raise HTTPException(
+                        status_code=422,
+                        detail="Default glossary was deleted; choose another in Settings",
+                    )
+                glossary_id, glossary_revision = selected.glossary_id, selected.revision
+        if glossary_id == "configured":
+            if glossary_revision is not None or resolved_glossary:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Configured glossary cannot have a revision or inline terms",
+                )
+        elif glossary_id:
             if resolved_glossary:
                 raise HTTPException(
                     status_code=422,
@@ -556,6 +614,11 @@ def create_app(
             headers={"Content-Disposition": 'attachment; filename="reviewed-translation.tex"'},
         )
 
+    @app.exception_handler(PreferencesConflictError)
+    @app.exception_handler(PreferencesStorageError)
+    async def preferences_error(_: Request, exc: ValueError) -> JSONResponse:
+        return JSONResponse(status_code=409, content={"detail": str(exc)})
+
     @app.exception_handler(GlossaryError)
     def glossary_command_failed(_: Request, exc: GlossaryError) -> JSONResponse:
         status = 422
@@ -667,7 +730,7 @@ def _parse_job_settings(
             model=config.provider.selected.model,
             source_language=config.translation.source_language,
             target_language=config.translation.target_language,
-            style=config.translation.style,
+            style=config.translation.style_name or config.translation.style.value,
             footnote_appearance_instructions=(config.translation.footnote_appearance_instructions),
             uncertainty_level=(
                 config.translation.uncertainty_level.value
@@ -695,6 +758,8 @@ def _parse_job_settings(
             status_code=422,
             detail="Select a model allowed by the project configuration",
         ) from None
+    if requested.style not in config.workbench.style_prompts:
+        raise HTTPException(status_code=422, detail="Select a configured translation style")
     if len(requested.footnote_appearance_instructions or "") > (
         config.web.max_instruction_characters
     ):
@@ -730,7 +795,13 @@ def _parse_job_settings(
         update={
             "source_language": requested.source_language,
             "target_language": requested.target_language,
-            "style": requested.style,
+            "style": (
+                TranslationStyle(requested.style)
+                if requested.style in {style.value for style in TranslationStyle}
+                else TranslationStyle.CUSTOM
+            ),
+            "style_name": requested.style,
+            "style_prompt": config.workbench.style_prompts[requested.style],
             "footnote_appearance_instructions": (
                 requested.footnote_appearance_instructions
                 if "footnote_appearance_instructions" in requested.model_fields_set

@@ -43,6 +43,8 @@ class StructuredPageTranslator:
             "structured_output_contract": self.contract,
             "max_output_tokens": self._config.max_output_tokens,
         }
+        if self._config.thinking_level != "default":
+            semantics["thinking_level"] = self._config.thinking_level
         return ProviderDescriptor(
             provider=self.provider,
             model=self._config.model,
@@ -159,6 +161,11 @@ class OpenAIPageTranslator(StructuredPageTranslator):
             text_format=payload_model,
             max_output_tokens=self._config.max_output_tokens,
             store=False,
+            **(
+                {"reasoning": {"effort": self._config.thinking_level}}
+                if self._config.thinking_level != "default"
+                else {}
+            ),
         )
         if response.status != "completed":
             raise StructuredRequestError(
@@ -211,6 +218,14 @@ class AnthropicPageTranslator(StructuredPageTranslator):
             output_format=payload_model,
             max_tokens=self._config.max_output_tokens,
             timeout=self._config.request_timeout_seconds,
+            **(
+                {
+                    "output_config": {"effort": self._config.thinking_level},
+                    "thinking": {"type": "adaptive"},
+                }
+                if self._config.thinking_level != "default"
+                else {}
+            ),
         )
         if response.stop_reason != "end_turn":
             raise StructuredRequestError(

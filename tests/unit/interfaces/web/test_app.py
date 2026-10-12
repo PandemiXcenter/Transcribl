@@ -24,6 +24,85 @@ from transcribl.config import ProjectConfig, load_project_config
 from transcribl.interfaces.web import create_app
 
 
+def test_settings_are_persistent_validated_and_snapshotted_per_job(tmp_path: Path) -> None:
+    config = configured_for_tmp(tmp_path)
+    manager = RecordingJobManager()
+
+    def client_for_app() -> TestClient:
+        return TestClient(create_app(config, job_manager=cast(WebJobManager, manager)))
+
+    with client_for_app() as client:
+        client.get("/session")
+        headers = {"X-CSRF-Token": client.cookies["at_csrf"]}
+        public = client.get("/api/config").json()
+        values = public["preferences"]["values"]
+        assert values["default_glossary"] == "none"
+        glossary = client.post(
+            "/api/glossaries",
+            json={
+                "name": "Medical",
+                "entries": [{"source_term": "Vattersot", "target_translation": "Dropsy"}],
+            },
+            headers=headers,
+        ).json()
+        values.update(
+            default_model="claude-haiku-5-5",
+            default_style="Research",
+            default_glossary=glossary["glossary_id"],
+        )
+        values["style_prompts"]["Research"] = "Preserve historical terminology and register."
+        values["thinking_levels"]["anthropic"] = "high"
+        command = {"values": values, "expected_revision": 0}
+        assert client.put("/api/settings", json=command).status_code == 403
+        response = client.put("/api/settings", json=command, headers=headers)
+        assert response.status_code == 200
+        assert response.headers["cache-control"] == "no-store"
+        assert client.put("/api/settings", json=command, headers=headers).status_code == 409
+        for field, invalid in (
+            ("default_model", "gemini-3.5-flash"),
+            ("default_style", "absent"),
+            ("default_glossary", "../../file"),
+        ):
+            assert (
+                client.put(
+                    "/api/settings",
+                    json={"values": {**values, field: invalid}, "expected_revision": 1},
+                    headers=headers,
+                ).status_code
+                == 422
+            )
+        assert (
+            client.post(
+                "/api/jobs",
+                files={"pdf": ("test.pdf", b"%PDF-1.7", "application/pdf")},
+                headers=headers,
+            ).status_code
+            == 202
+        )
+        first = manager.submissions[-1][4]
+        assert first.provider.name == "anthropic"
+        assert first.provider.anthropic.model == "claude-haiku-5-5"
+        assert first.provider.anthropic.thinking_level == "high"
+        assert first.translation.style_prompt == values["style_prompts"]["Research"]
+        assert first.translation.style_name == "Research"
+        assert manager.submissions[-1][2] == {"Vattersot": "Dropsy"}
+        values["style_prompts"]["Research"] = "Use modern terminology."
+        assert (
+            client.put(
+                "/api/settings", json={"values": values, "expected_revision": 1}, headers=headers
+            ).status_code
+            == 200
+        )
+        assert first.translation.style_prompt == "Preserve historical terminology and register."
+    with client_for_app() as restarted:
+        public = restarted.get("/api/config").json()
+        assert public["preferences"]["revision"] == 2
+        assert public["preferences"]["values"] == values
+        assert public["translation"]["style_prompt"] == "Use modern terminology."
+        assert "style_prompt" in public["prompts"]["translation"]
+        assert "style_prompt" in public["prompts"]["table"]
+
+
 class RecordingJobManager:
     def __init__(self) -> None:
         self.submissions: list[
@@ -159,39 +238,8 @@ def test_index_and_public_config_never_expose_secret(tmp_path: Path) -> None:
 
     assert index.status_code == 200
     assert app.title == "Transcribl"
-    assert "<title>Transcribl</title>" in index.text
-    assert 'aria-label="Transcribl home"' in index.text
-    assert "Bring an old text into clear view" not in index.text
-    for expected_control in (
-        'data-tab="translate"',
-        'data-tab="mappings"',
-        'data-tab="settings"',
-        'data-tab="review"',
-        "Input language",
-        "Output language",
-        "Job settings",
-        "Previous-page text context",
-        "Page image resolution (DPI)",
-        "Uncertain term level",
-        "Add instructions",
-        "Mark all numbers, or mark all medical terms",
-        "Auto continue",
-        "Save on this computer",
-        "Original page",
-        "Original page zoom",
-        "Translated text",
-        "Translate One",
-        "Translate All",
-        "Uncertain terms (0)",
-        ">Articles</button>",
-        "LaTeX PDF (.pdf)",
-        "LaTeX source (.tex)",
-        "Markdown (.md)",
-        "Plain text (.txt)",
-        'data-action="continue-job"',
-        'data-action="cancel-job"',
-    ):
-        assert expected_control in index.text
+    assert index.json() == {"application": "Transcribl"}
+    assert "at_csrf" in index.cookies
     assert index.headers["cache-control"] == "no-store"
     assert public_config.status_code == 200
     payload_text = public_config.text
@@ -220,7 +268,7 @@ def test_index_and_public_config_never_expose_secret(tmp_path: Path) -> None:
         "zoom_levels": [100, 125, 150, 175, 200],
         "zoom_default_percent": 100,
     }
-    assert "gemini-3.5-flash-lite" in payload["provider"]["selectable_models"]
+    assert "gemini-3.5-flash-lite" not in payload["provider"]["selectable_models"]
     assert "review_context_pages" not in payload["limits"]
     assert payload["limits"]["max_instruction_characters"] == 4_000
 
@@ -329,104 +377,6 @@ def test_article_delete_requires_csrf_and_calls_manager(tmp_path: Path) -> None:
     assert manager.deleted_reviews == [run_id]
 
 
-def test_review_frontend_mounts_all_pages_and_uses_delegated_handlers(
-    tmp_path: Path,
-) -> None:
-    config = configured_for_tmp(tmp_path)
-    manager = RecordingJobManager()
-    app = create_app(config, job_manager=cast(WebJobManager, manager))
-
-    with TestClient(app) as client:
-        html = client.get("/").text
-        javascript = client.get("/assets/app.js").text
-        styles = client.get("/assets/styles.css").text
-
-    assert "review_context_pages" not in javascript
-    assert "function renderAllReviewPages" in javascript
-    assert "function requestReviewWindowShift" not in javascript
-    assert "for (const page of state.reviewPages)" in javascript
-    assert "function showSourcePage" in javascript
-    assert "function persistReviewPosition" in javascript
-    assert 'reviewList.addEventListener("click", handleReviewListClick)' in javascript
-    assert "state.reviewDrafts.get" in javascript
-    assert 'translationContent.addEventListener("click", handleReviewClick)' in javascript
-    assert 'translationContent.addEventListener("input", handleReviewInput)' in javascript
-    assert 'translationContent.addEventListener("paste", handleReviewPaste)' in javascript
-    assert 'uncertaintyGroupList.addEventListener("click", handleUncertaintyGroupClick)' in (
-        javascript
-    )
-    assert 'mappingBody.addEventListener("click", handleMappingClick)' in javascript
-    assert 'progressErrorActions.addEventListener("click", handleProgressAction)' in javascript
-    assert "function continueStoppedJob" in javascript
-    assert 'apiRequest("/api/jobs/recoverable")' in javascript
-    assert "Machine-reconstructed table" in javascript
-    assert "Show original machine reconstruction" in javascript
-    assert "function renderUncertaintyGroupList" in javascript
-    assert "function makeExportMenu" in javascript
-    assert "section-type-select" in javascript
-    assert "footnote-owner-select" in javascript
-    assert "footnote-anchor-input" in javascript
-    assert "Model footnote assessment" in javascript
-    assert "printed reference" in javascript
-    assert "Marker after character" in javascript
-    assert "function footnoteEntrypointsForBlock" in javascript
-    assert "footnote-entrypoint-marker" in javascript
-    assert "function editorPlainText" in javascript
-    assert "data-editor-display-only" in javascript
-    assert 'translationContent.addEventListener("change", handleReviewControlChange)' in javascript
-    assert 'reviewEditor.addEventListener("change", handleReviewToolbarChange)' in javascript
-    assert "function deleteLibraryReview" in javascript
-    assert 'data-testid="previous-page-context-count"' in html
-    assert 'data-testid="page-image-dpi"' in html
-    assert 'data-testid="auto-continue"' in html
-    assert 'data-testid="footnote-appearance-instructions"' in html
-    assert 'data-testid="uncertainty-level"' in html
-    assert 'data-testid="uncertainty-instructions"' in html
-    assert 'data-testid="review-zoom-select"' in html
-    assert "function setReviewZoom" in javascript
-    assert "state.reviewZoomPercent = normalized" in javascript
-    assert '--review-page-zoom", String(normalized / 100)' in javascript
-    assert "transform: scale(var(--review-page-zoom, 1))" in styles
-    assert "footnote_appearance_instructions" in javascript
-    assert "uncertainty_level: selectedUncertaintyLevel" in javascript
-    assert "uncertainty_instructions: uncertaintyInstructionText || null" in javascript
-    assert 'form.addEventListener("click", handleTranslationFormClick)' in javascript
-    assert 'form.addEventListener("change", handleTranslationFormChange)' in javascript
-    assert "auto_continue: autoContinue.checked" in javascript
-    assert 'remove.dataset.action = "delete-review"' in javascript
-    assert 'reviewComplete\n        ? "Read"' in javascript
-    assert ': "Review"' in javascript
-    assert "link.href = exportUrl(jobId, format)" in javascript
-    assert "open-uncertainty-group" in javascript
-    assert "continued-paragraph-block" in javascript
-    assert "function makeParagraphGroup" in javascript
-    assert "function saveParagraphGroup" in javascript
-    assert 'save.dataset.action = "save-paragraph"' in javascript
-    assert 'validate.dataset.action = "save-paragraph"' in javascript
-    assert 'boundary.dataset.action = "show-paragraph-page"' in javascript
-    assert "/paragraph-revisions" in javascript
-    assert "merged-paragraph-editor" in javascript
-    assert "paragraph-page-boundary page-sync-anchor" in javascript
-    assert "Table-bearing pages send that page again" in html
-    assert "previous_page_context_count" in javascript
-
-    mapping_factory = javascript.split("function addMapping", 1)[1].split(
-        "function handleMappingClick",
-        1,
-    )[0]
-    review_factory = javascript.split("function makeTranslationBlock", 1)[1].split(
-        "function captureDrafts",
-        1,
-    )[0]
-    uncertainty_factory = javascript.split("function renderUncertaintyGroupList", 1)[1].split(
-        "function openUncertaintyList",
-        1,
-    )[0]
-    assert ".addEventListener" not in mapping_factory
-    assert ".addEventListener" not in review_factory
-    assert ".addEventListener" not in uncertainty_factory
-
-
 def test_upload_requires_csrf_and_confines_hostile_filename(tmp_path: Path) -> None:
     config = configured_for_tmp(tmp_path)
     manager = RecordingJobManager()
@@ -508,7 +458,7 @@ def test_job_uses_selected_languages_model_style_and_session_key(
     manager = RecordingJobManager()
     app = create_app(config, job_manager=cast(WebJobManager, manager))
     settings = {
-        "model": "gemini-3.5-flash-lite",
+        "model": "gemini-3.8-flash",
         "source_language": "Latin",
         "target_language": "German",
         "style": "faithful",
@@ -537,7 +487,7 @@ def test_job_uses_selected_languages_model_style_and_session_key(
     assert response.status_code == 202
     assert "temporary_key_123" not in response.text
     runtime_config = manager.submissions[0][4]
-    assert runtime_config.provider.gemini.model == "gemini-3.5-flash-lite"
+    assert runtime_config.provider.gemini.model == "gemini-3.8-flash"
     assert runtime_config.translation.source_language == "Latin"
     assert runtime_config.translation.target_language == "German"
     assert runtime_config.translation.style.value == "faithful"
@@ -913,9 +863,7 @@ def test_glossary_routes_persist_selection_and_protect_mutations(tmp_path: Path)
         return TestClient(create_app(config, job_manager=cast(WebJobManager, manager)))
 
     with app_client() as client:
-        html = client.get("/").text
-        assert ">Glossaries<" in html and "Term mappings" not in html
-        assert 'id="job-glossary-select"' in html
+        client.get("/session")
         headers = {"X-CSRF-Token": client.cookies["at_csrf"]}
         command = {
             "name": "Historical",
@@ -950,6 +898,8 @@ def test_glossary_routes_persist_selection_and_protect_mutations(tmp_path: Path)
             and manager.submissions[-1][4].translation.glossary == {}
         )
         assert submit({}).status_code == 202
+        assert manager.submissions[-1][4].translation.glossary == {}
+        assert submit({"glossary_id": "configured"}).status_code == 202
         assert manager.submissions[-1][4].translation.glossary == {"Baseline": "Default"}
         changed = {
             "name": "Modern",
@@ -969,7 +919,7 @@ def test_glossary_routes_persist_selection_and_protect_mutations(tmp_path: Path)
             == 422
         )
         assert submit({"glossary_id": "../outside", "glossary_revision": "1"}).status_code == 404
-        assert len(manager.submissions) == 3
+        assert len(manager.submissions) == 4
         assert manager.submissions[0][2] == {"Vattersot": "Dropsy"}
     with app_client() as restarted:
         restarted.get("/")

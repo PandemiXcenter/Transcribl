@@ -85,6 +85,8 @@ class TranslationSettings(ContractModel):
     source_language: NonEmptyText = "auto"
     target_language: NonEmptyText = "English"
     style: TranslationStyle = TranslationStyle.BALANCED
+    style_name: str | None = Field(default=None, min_length=1, max_length=100)
+    style_prompt: str | None = Field(default=None, min_length=1, max_length=4000)
     custom_instructions: str | None = Field(default=None, max_length=4_000)
     footnote_appearance_instructions: str | None = Field(default=None, max_length=4_000)
     glossary: dict[str, str] = Field(default_factory=dict)

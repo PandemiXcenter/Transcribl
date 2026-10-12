@@ -3,9 +3,10 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 
 from transcribl.config import ProviderName
-from transcribl.domain.enums import BlockType, ReviewStatus, TranslationStyle
+from transcribl.domain.enums import BlockType, ReviewStatus
 from transcribl.domain.glossaries import GlossaryEntry
 from transcribl.domain.models import BlockId, NonEmptyText
+from transcribl.domain.preferences import WorkbenchPreferences
 
 
 class ApiModel(BaseModel):
@@ -22,7 +23,7 @@ class JobTranslationSettings(ApiModel):
     model: NonEmptyText = Field(max_length=200)
     source_language: NonEmptyText = Field(max_length=100)
     target_language: NonEmptyText = Field(max_length=100)
-    style: TranslationStyle
+    style: NonEmptyText = Field(max_length=100)
     footnote_appearance_instructions: str | None = Field(default=None, max_length=4_000)
     uncertainty_level: Literal["off", "low", "standard", "high"] | None = None
     uncertainty_instructions: str | None = Field(default=None, max_length=4_000)
@@ -51,6 +52,11 @@ class ApiKeySettingsRequest(ApiModel):
         if not secret.strip() or any(character in secret for character in "\r\n\0"):
             raise ValueError("API key must be a nonblank single-line value")
         return SecretStr(secret.strip())
+
+
+class WorkbenchSettingsRequest(ApiModel):
+    values: WorkbenchPreferences
+    expected_revision: int = Field(ge=0)
 
 
 class ContinueJobRequest(ApiModel):

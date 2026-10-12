@@ -8,13 +8,16 @@ dependencies = [
     "anthropic>=1.13.0",
     "fastapi>=0.140.9",
     "google-genai>=2.14.0",
+    "httpx>=0.28.1",
     "markitdown[pdf]>=0.1.6",
+    "nicegui>=3.18.0",
     "openai>=3.29.0",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.14.2",
     "pypdf>=6.14.2",
     "pypdfium2>=5.12.1",
     "python-multipart>=0.0.32",
+    "pywebview>=6.2.1",
     "rich>=15.0.0",
     "typer>=0.27.0",
     "uvicorn>=0.51.0",
@@ -23,7 +26,6 @@ dependencies = [
 [project.scripts]
 transcribl = "transcribl.cli:app"
 app = "transcribl.cli:launch_app"
-compile = "transcribl.build_executable:main"
 
 [build-system]
 requires = ["uv_build>=0.9.21,<0.10.0"]
@@ -31,11 +33,11 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
-    "httpx>=0.28.1",
     "httpx2>=2.13.1",
     "mypy>=2.3.0",
     "pyinstaller>=6.22.1",
     "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
     "ruff>=0.16.0",
 ]

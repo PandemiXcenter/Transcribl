@@ -41,7 +41,8 @@ class FakeClient:
         self.closed = True
 
 
-def test_gemini_adapter_maps_multimodal_structured_output(tmp_path: Path) -> None:
+@pytest.mark.parametrize("thinking", ["default", "low", "medium", "high"])
+def test_gemini_adapter_maps_multimodal_structured_output(tmp_path: Path, thinking: str) -> None:
     image = tmp_path / "page.png"
     image.write_bytes(b"not-a-real-png")
     payload = GeneratedPagePayload(
@@ -74,6 +75,7 @@ def test_gemini_adapter_maps_multimodal_structured_output(tmp_path: Path) -> Non
         attempts=3,
         max_inline_request_bytes=19_000_000,
         client=client,
+        thinking_level=thinking,
     )
 
     result = translator.translate_page(
@@ -86,17 +88,27 @@ def test_gemini_adapter_maps_multimodal_structured_output(tmp_path: Path) -> Non
             settings=TranslationSettings(),
         )
     )
+    thinking_config = client.models.kwargs["config"].thinking_config
+    if thinking == "default":
+        assert thinking_config is None
+    else:
+        assert thinking_config.thinking_level.value == thinking.upper()
+        assert translator.descriptor.semantic_configuration["thinking_level"] == thinking
 
     assert result.payload == payload
     assert result.response_id == "response-123"
     assert result.input_tokens == 101
     assert translator.descriptor.configuration == {
+        **({"thinking_level": thinking} if thinking != "default" else {}),
         "api_version": "v1",
         "request_timeout_seconds": 120,
         "request_attempts": 3,
         "max_inline_request_bytes": 19_000_000,
     }
-    assert translator.descriptor.semantic_configuration == {"api_version": "v1"}
+    assert translator.descriptor.semantic_configuration == {
+        "api_version": "v1",
+        **({"thinking_level": thinking} if thinking != "default" else {}),
+    }
     assert client.models.kwargs["model"] == "gemini-test"
     assert isinstance(client.models.kwargs["contents"], types.Content)
     generation_config = client.models.kwargs["config"]

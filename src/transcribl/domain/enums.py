@@ -49,6 +49,7 @@ class SegmentContinuation(StrEnum):
 
 
 class TranslationStyle(StrEnum):
+    CUSTOM = "custom"
     """Provider-neutral translation policy."""
 
     FAITHFUL = "faithful"

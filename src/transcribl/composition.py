@@ -58,6 +58,7 @@ def provider_translator(
         timeout_seconds=gemini.request_timeout_seconds,
         attempts=gemini.request_attempts,
         max_inline_request_bytes=gemini.max_inline_request_bytes,
+        thinking_level=gemini.thinking_level,
     ) as translator:
         yield translator
 

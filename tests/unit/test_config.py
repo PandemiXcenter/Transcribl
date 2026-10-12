@@ -12,11 +12,12 @@ def test_default_toml_is_the_complete_non_secret_configuration() -> None:
     config = load_project_config(Path("config/default.toml"))
 
     assert config.provider.gemini.model == "gemini-3.8-flash"
-    assert config.provider.gemini.selectable_models == [
-        "gemini-3.8-flash",
-        "gemini-3.6-flash",
-        "gemini-3.5-flash",
-        "gemini-3.5-flash-lite",
+    assert config.provider.gemini.selectable_models == ["gemini-3.8-flash"]
+    assert config.provider.openai.selectable_models == ["gpt-6-astra", "gpt-6.1-sol", "gpt-6-luna"]
+    assert config.provider.anthropic.selectable_models == [
+        "claude-opus-5-5",
+        "claude-sonnet-5-5",
+        "claude-haiku-5-5",
     ]
     assert config.provider.gemini.api_version == "v1"
     assert config.provider.gemini.max_inline_request_bytes == 19_000_000
@@ -343,4 +344,26 @@ def test_language_choices_reject_invalid_values(choices: list[str]) -> None:
     data = load_project_config(Path("config/default.toml")).model_dump()
     data["web"]["language_choices"] = choices
     with pytest.raises(ValidationError):
+        ProjectConfig.model_validate(data)
+
+
+@pytest.mark.parametrize("value", [0, 8000])
+def test_desktop_window_dimensions_are_bounded(value: int) -> None:
+    from transcribl.config import ProjectConfig
+
+    data = load_project_config(Path("config/default.toml")).model_dump()
+    data["desktop"]["window_width"] = value
+    with pytest.raises(ValidationError, match="window_width"):
+        ProjectConfig.model_validate(data)
+
+
+def test_desktop_section_is_required_and_minimum_must_fit() -> None:
+    from transcribl.config import ProjectConfig
+
+    data = load_project_config(Path("config/default.toml")).model_dump()
+    data["desktop"]["minimum_width"] = data["desktop"]["window_width"] + 1
+    with pytest.raises(ValidationError, match="minimum dimensions"):
+        ProjectConfig.model_validate(data)
+    del data["desktop"]
+    with pytest.raises(ValidationError, match="desktop"):
         ProjectConfig.model_validate(data)

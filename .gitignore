@@ -26,3 +26,7 @@ data/**
 .DS_Store
 .idea/
 .vscode/
+
+# Local browser verification
+.playwright-cli/
+output/playwright/

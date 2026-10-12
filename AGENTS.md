@@ -5,7 +5,7 @@ These instructions apply to the entire repository.
 ## Mission and current scope
 
 Transcribl is a page-preserving PDF translation pipeline with a local
-FastAPI workbench for colleagues. The active architecture is:
+NiceGUI desktop workbench for colleagues backed by a local FastAPI API. The active architecture is:
 
 ```text
 PDF -> paired per-page Markdown + PNG -> structured page translation pass
@@ -15,7 +15,7 @@ PDF -> paired per-page Markdown + PNG -> structured page translation pass
 ```
 
 The web interface is deliberately a small loopback-only internal tool. Preserve
-its Translate, Term mappings, Settings, and Articles tabs, but do not add a
+its Translate, Glossaries, and Articles tabs and top-right Settings control, but do not add a
 database, remote deployment stack, authentication scheme, frontend framework, or
 durable task queue unless a task explicitly expands that phase.
 
@@ -80,8 +80,12 @@ src/transcribl/prompts/
     Versioned prompt resources. Prompt behavior is part of cache identity.
 
 src/transcribl/interfaces/web/
-    FastAPI transport, strict request schemas, and small static colleague UI.
+    FastAPI transport and strict request schemas.
     Calls application services; owns HTTP/CSRF/upload/presentation concerns.
+
+src/transcribl/interfaces/desktop/
+    NiceGUI native controls, per-window state, and the scoped editorial component.
+    Uses the strict application API; no pipeline or provider implementation.
 
 src/transcribl/composition.py
     Shared wiring for CLI and web entry points.
@@ -90,9 +94,12 @@ src/transcribl/cli.py
     Command inputs plus `serve` and the zero-argument `uv run app` entry points.
     No pipeline/business rules.
 
-src/transcribl/build_executable.py, executable.py, runtime.py
-    Native PyInstaller build orchestration, frozen entry dispatch, and persistent
-    per-user runtime paths. No pipeline/business rules.
+src/transcribl/executable.py, runtime.py
+    Frozen entry dispatch and persistent per-user runtime paths.
+    No pipeline/business rules.
+
+.github/workflows/desktop-build.yml, .github/packaging/
+    GitHub Actions-only macOS ARM64 and Windows x64 packaging and smoke checks.
 
 tests/unit/
     Pure domain/application/config and mocked-adapter behavior.
@@ -294,7 +301,7 @@ library when adequate.
 - Edit the resource under `prompts/`, not an inline provider string.
 - Bump `PROMPT_VERSION` for a semantic main-pass change and
   `TABLE_PROMPT_VERSION` for a semantic table-pass change. The current contracts
-  are `translate-page-v6` and `reconstruct-tables-v1`.
+  are `translate-page-v11` and `reconstruct-tables-v3`.
 - Keep page Markdown visibly delimited as document data.
 - Delimit any previous finalized page projection as untrusted, read-only context
   and require current-page-only output.
@@ -392,26 +399,28 @@ library when adequate.
   single-worker executor cannot deadlock by waiting on its own queue.
 - Add concurrency/history tests before multi-editor behavior.
 
-### Native executable packaging
+### Desktop packaging
 
-- Use only the uv-managed PyInstaller development dependency.
-- Preserve one console-capable executable so no arguments launch the workbench
-  and CLI arguments retain the complete backend workflow.
-- Reject cross-compilation. Build Windows on Windows, macOS on macOS, and Linux
-  on Linux; use the oldest intended Linux baseline.
-- Bundle the checked-in default TOML, package data, prompts, static web assets,
-  MarkItDown/Magika data, and PDFium binaries. Never bundle `.env`, source PDFs,
-  generated artifacts, or provider responses.
-- `uv run compile --<platform> --clean` may remove only that platform's ignored
-  `build/pyinstaller/` and `dist/` subdirectories. It must preserve local secrets,
-  personal TOML, artifacts, and editorial metadata.
-- Keep frozen config, `.env`, and artifacts in the native per-user application
-  data directory, never PyInstaller's temporary extraction directory.
-- Keep XeLaTeX external and document that reviewed PDF export requires it.
-- Unit-test platform validation, PyInstaller arguments, frozen path materialization,
-  and zero-argument/CLI dispatch. Smoke-test the native artifact without Gemini.
+- Distributions are built only by `.github/workflows/desktop-build.yml` using the
+  uv-managed PyInstaller dependency and Actions-owned spec. Do not restore a
+  local build command or a Linux target.
+- Build macOS ARM64 on the native macOS runner and Windows x64 on the native
+  Windows runner. Preserve the CI-only and architecture guards.
+- Preserve the console-capable executable: no arguments open NiceGUI native
+  mode; CLI arguments retain the complete backend workflow.
+- Call `multiprocessing.freeze_support()` before GUI/CLI imports in the frozen
+  entry point. Keep reload disabled and reviewed file downloads enabled.
+- Bundle only checked-in default TOML, package/prompts/desktop assets, NiceGUI,
+  pywebview, MarkItDown/Magika and PDFium. Never bundle local keys, personal TOML,
+  source PDFs, generated artifacts or provider responses.
+- Keep frozen config, keys, glossaries and artifacts in the native per-user data
+  directory, preserving existing installations. Keep XeLaTeX external.
+- Test runtime dispatch, resource/architecture guards, and default materialization.
+  Both CI jobs must smoke-test the packaged CLI, synthetic extraction and NiceGUI
+  server without a provider. Do not claim native package verification until CI
+  and target-desktop testing have actually run.
 
-For a web change, inspect `interfaces/web/app.py`, its strict schemas and static
+For a web change, inspect `interfaces/web/app.py`, its strict schemas, `interfaces/desktop/` and its editorial
 assets, `application/web_jobs.py`, `application/editorial.py`, and the matching
 tests before editing. Keep upload validation, path confinement, CSRF checks,
 no-store headers, model allowlisting, secret redaction, and staged-upload cleanup
@@ -463,7 +472,7 @@ uv run pytest \
   tests/unit/adapters/test_filesystem_editorial.py
 ```
 
-Static UI changes also require a local non-provider smoke check of tab navigation,
+NiceGUI and editorial component changes also require a local non-provider smoke check of tab navigation,
 form validation, translated-pane scroll synchronization, edit controls, and the
 conditional Translate All action. If the browser runtime is unavailable, state
 that visual/browser behavior was not verified rather than substituting a live

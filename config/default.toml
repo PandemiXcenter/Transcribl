@@ -16,33 +16,34 @@ name = "gemini"
 # A stable multimodal model with structured-output support. Change without code.
 model = "gemini-3.8-flash"
 # Models colleagues may choose in the local Settings tab.
-selectable_models = [
-    "gemini-3.8-flash",
-    "gemini-3.6-flash",
-    "gemini-3.5-flash",
-    "gemini-3.5-flash-lite",
-]
+selectable_models = ["gemini-3.8-flash"]
 api_version = "v1"
 request_timeout_seconds = 120
 request_attempts = 3
 # Conservative encoded request ceiling below Gemini's 20 MB inline-image limit.
 max_inline_request_bytes = 19000000
+thinking_level = "default"
+thinking_level_choices = ["default", "low", "medium", "high"]
 
 [provider.openai]
 model = "gpt-6-astra"
-selectable_models = ["gpt-6-astra"]
+selectable_models = ["gpt-6-astra", "gpt-6.1-sol", "gpt-6-luna"]
 request_timeout_seconds = 180
 request_attempts = 3
 max_inline_request_bytes = 19000000
 max_output_tokens = 32768
+thinking_level = "default"
+thinking_level_choices = ["default", "low", "medium", "high", "xhigh", "max"]
 
 [provider.anthropic]
 model = "claude-opus-5-5"
-selectable_models = ["claude-opus-5-5"]
+selectable_models = ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"]
 request_timeout_seconds = 180
 request_attempts = 3
 max_inline_request_bytes = 19000000
 max_output_tokens = 32768
+thinking_level = "default"
+thinking_level_choices = ["default", "low", "medium", "high", "xhigh", "max"]
 
 [translation]
 source_language = "Danish"
@@ -77,13 +78,19 @@ include_page_numbers = false
 latex_engine = "xelatex"
 compile_timeout_seconds = 120
 
+[desktop]
+window_width = 1440
+window_height = 1000
+minimum_width = 900
+minimum_height = 650
+
 [web]
 # Custom is appended by the UI, including for defaults absent from this list.
 language_choices = ["Danish", "English", "Norwegian", "Swedish", "German", "French", "Spanish", "Italian", "Portuguese", "Dutch", "Finnish", "Icelandic", "Latin", "Greek", "Polish", "Ukrainian", "Russian", "Arabic", "Hebrew", "Hindi", "Chinese", "Japanese", "Korean"]
 # The editor is intentionally local-only until authentication is added.
 host = "127.0.0.1"
 port = 8000
-# Open the workbench in the default browser after the local server is ready.
+# Only used by the optional browser-mode `serve` command; `app` opens a native window.
 open_browser_on_start = true
 max_upload_bytes = 100000000
 max_concurrent_jobs = 1
@@ -102,3 +109,14 @@ review_zoom_default_percent = 100
 auto_continue_default = false
 # Bound provider cost when Auto continue is enabled.
 auto_continue_attempts = 1
+
+[workbench]
+# Settings changes are stored in .settings.toml under the configured artifact root.
+default_glossary = "none"
+max_styles = 50
+max_style_prompt_characters = 4000
+
+[workbench.style_prompts]
+faithful = "Remain as close as the target language permits to source wording, syntax, and historical register. Preserve every supported fact."
+balanced = "Preserve meaning and tone while using natural target-language syntax. Preserve every supported fact."
+readable = "Prioritize fluent modern target-language prose without omitting, summarizing, or inventing information."

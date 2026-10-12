@@ -20,6 +20,36 @@ from transcribl.ports.translation import ProviderDescriptor
 HASH = "a" * 64
 
 
+@pytest.mark.parametrize("change", ["style", "thinking"])
+def test_style_and_thinking_changes_invalidate_both_passes(change: str) -> None:
+    page_hashes, table_hashes = set(), set()
+    for value in ("low", "high"):
+        settings = TranslationSettings(
+            style_name="Research", style_prompt=value if change == "style" else "Preserve register."
+        )
+        provider = ProviderDescriptor(
+            provider="fake",
+            model="fake-v1",
+            semantic_configuration={"thinking_level": value if change == "thinking" else "default"},
+        )
+        page_hashes.add(
+            fingerprints.page_input_fingerprint(
+                page=_page(), settings=settings, provider=provider, prompt="same prompt"
+            )
+        )
+        table_hashes.add(
+            fingerprints.table_input_fingerprint(
+                page=_page(),
+                settings=settings,
+                provider=provider,
+                prompt="same prompt",
+                first_pass_fingerprint=HASH,
+                table_blocks=[_table(SegmentContinuation.COMPLETE)],
+            )
+        )
+    assert len(page_hashes) == len(table_hashes) == 2
+
+
 def _page() -> PreparedPage:
     markdown = ArtifactRef(
         path="prepared/0001/source.md",

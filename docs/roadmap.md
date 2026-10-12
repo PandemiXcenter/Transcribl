@@ -1,7 +1,7 @@
 # Roadmap
 
 Transcribl now has a working backend, immutable editorial layer, and a
-minimal local FastAPI workbench. The remaining roadmap hardens those components
+NiceGUI desktop workbench with a local FastAPI application API. The remaining roadmap hardens those components
 without presenting the current loopback tool as a production, remote, or
 multi-user service.
 
@@ -70,6 +70,8 @@ Implemented:
   translations (default 2), shared by primary and table prompts and constrained
   to current-page-only output;
 - named local glossaries with per-job selection and immutable term snapshots;
+- persisted workbench defaults, provider thinking controls, and editable named
+  styles with exact prompt inspection and checkpoint invalidation;
 - per-job input/output languages, style, and allowlisted provider model, with TOML
   defaults (Danish to English in the checked-in config);
 - distinct main/table prompt versions, hashes, provenance, and checkpoint
@@ -183,14 +185,17 @@ Implemented:
 - export menus for reviewed XeLaTeX source, Markdown, plain text, and locally
   typeset XeLaTeX PDF;
 - section-type correction and footnote owner/marker controls;
-- native uv-managed PyInstaller builds for Windows, macOS, and Linux, producing
-  one executable that launches the workbench or delegates to the complete CLI.
+- NiceGUI native desktop with focused controls and the complete editorial component;
+- GitHub Actions-only packaging for macOS ARM64 and Windows x64, with locked uv
+  environments, architecture guards, bundled resources and provider-free packaged
+  CLI/extraction/server smoke tests. The complete CLI remains available.
 
 Deferred:
 
 - interruption of an active provider request and arbitrary per-page retry;
 - filters for unreviewed, uncertain, failed, or changed blocks;
 - split/merge, revision history, and reviewer identity UI;
+- native distribution validation on recipient machines, signing and notarization;
 - comprehensive browser automation and cross-browser visual verification;
 - remote access or deployment.
 

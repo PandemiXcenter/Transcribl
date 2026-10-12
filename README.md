@@ -7,8 +7,8 @@ dedicated table-reconstruction request, validates both responses with Pydantic,
 and compiles the canonical dataset into XeLaTeX source, with Markdown retained as
 an additional deterministic projection.
 
-The repository includes the backend pipeline, CLI, and a small tabbed FastAPI
-interface for colleagues. The interface provides PDF upload, per-job language
+The repository includes the backend pipeline, CLI, and a NiceGUI desktop
+workbench for research. The interface provides PDF upload, per-job language
 selection, reusable glossaries, provider settings, side-by-side review,
 append-only corrections, qualitative uncertainty review, footnote ownership and
 marker editing, and reviewed LaTeX, PDF, Markdown, and plain-text downloads. It is
@@ -101,9 +101,9 @@ preceding machine fragment.
 
 The same context can resolve a word, sentence, heading, footnote, or table
 continuation that enters the current page. The main contract is versioned as
-`translate-page-v10`; the table contract is `reconstruct-tables-v2`.
+`translate-page-v11`; the table contract is `reconstruct-tables-v3`.
 
-## Quick start: local interface
+## Quick start: desktop application
 
 The project uses `uv` exclusively for Python, environments, dependencies, scripts,
 and developer tools.
@@ -123,12 +123,16 @@ exists and otherwise uses the complete checked-in `config/default.toml`:
 uv run app
 ```
 
-The launcher opens the interface in the default browser after the local server is
-ready. If desktop browser integration is unavailable, open
-`http://127.0.0.1:8000` manually unless the selected TOML file configures another
-loopback host or port. Set `web.open_browser_on_start = false` in the selected
-TOML file to disable automatic opening. The interface is organized as an internal
-workbench:
+The launcher opens a native desktop window through NiceGUI and pywebview. The
+main tabs are **Translate**, **Glossaries**, and **Articles**. A gear in the top
+right opens **Settings**. Translation options are grouped in a collapsible panel.
+Settings saves defaults; Translate can override them for a single job. The editorial workspace
+retains its complete document, keyboard controls, drafts, and page synchronization
+when switching tabs.
+
+For browser-based development, run `uv run transcribl serve`. Only that command
+uses `web.open_browser_on_start`. Both modes bind to the configured loopback
+host/port and use the same application services.
 
 - **Translate** selects a laptop PDF and shows the complete per-job choices before
   submission: input/output languages, provider model, translation style, finalized
@@ -146,8 +150,22 @@ workbench:
   entries), or **No glossary**. A saved glossary replaces the configured terms in
   full. Unsaved edits must be saved before using the selected glossary. Each job
   snapshots the saved terms; later glossary changes never alter that run.
-- **Settings** selects a provider model from the TOML allowlist and a translation
-  style. Each provider key can be used for the current browser session, or **Save on
+- **Settings** starts with **Default model**, **Default style**, **Default glossary**
+  (initially **None**), and **API Keys**. **Save settings** persists non-secret
+  preferences atomically in `.settings.toml` under the configured artifact root.
+  Defaults survive restarts; existing runs and deliberate per-job overrides are
+  unchanged. **Reload saved settings** discards unsaved settings edits.
+  **Advanced settings** contains thinking levels for each provider, default
+  continuity pages, image DPI, uncertainty marking, and Auto continue. It also
+  exposes the verbatim, versioned translation/table instructions and resolved
+  default translation settings. Page-specific evidence is appended at execution.
+  Built-in style instructions can be edited and reset; **Add style** copies the
+  currently displayed instructions into a named custom style for further editing.
+  Save settings before selecting that style on Translate. The exact selected
+  style text and thinking level are snapshotted for each run and invalidate
+  mismatched checkpoints in both translation passes.
+  **API Keys** opens a dialog with separate Google (Gemini), OpenAI, and
+  Anthropic credentials. Each key can be used for the current window session, or **Save on
   this computer** can store it locally for later sessions. The saved value is
   never returned to or displayed by the interface.
 - **Articles** opens with a catalog of every valid completed translation run found
@@ -198,35 +216,28 @@ task interruption. This is filesystem discovery, not a database or durable task
 queue. There is no authentication or remote deployment support, so do not expose
 the server on a network.
 
-## Native executable
+## Desktop distributions
 
-Build a native single-file program with the uv-managed PyInstaller dependency:
+Builds are owned exclusively by the **Desktop builds** GitHub Actions workflow
+in [`.github/workflows/desktop-build.yml`](.github/workflows/desktop-build.yml).
+It runs on pull requests, pushes to `main`, version tags, and manual dispatch.
+Download the resulting artifact for your platform:
 
-```bash
-uv run compile --windows
-uv run compile --mac
-uv run compile --linux
-```
+- **macOS ARM64**: `Transcribl-macos-arm64.zip`, containing `Transcribl.app`.
+- **Windows x64**: `Transcribl-windows-x64.zip`, containing the complete
+  `Transcribl` folder; launch `Transcribl.exe` inside it.
 
-Add `--clean` for a cache-free distributable build using only the checked-in
-default configuration, for example `uv run compile --mac --clean`. Neither clean
-nor ordinary builds include `.env`, personal TOML, artifacts, or saved review
-metadata. The recipient's executable still persists their own settings, key,
-jobs, and editorial metadata in their per-user application-data directory.
+The former `uv run compile --mac/--windows/--linux` build commands are removed.
+The pipeline's `transcribl compile <job>` command remains available. Build files
+live under `.github/packaging/` and reject local or unsupported build hosts.
 
-Run the command on the operating system named by the flag; PyInstaller does not
-cross-compile. The result is written below `dist/<platform>/`. With no arguments,
-the executable starts and opens the same local interface as `uv run app`; with
-arguments it exposes the complete existing CLI, including `run`, `ingest`, `translate`, the
-document `compile` subcommand, and `serve`.
-
-The executable bundles the application, Python runtime, UI and prompt resources,
-MarkItDown, and PDFium. It keeps config, artifacts, and the optional saved Gemini
-key in the operating system's per-user application-data directory rather than
-PyInstaller's temporary extraction directory. XeLaTeX remains an external
-workstation requirement for reviewed PDF export. See
-[`docs/packaging.md`](docs/packaging.md) for output paths, native-build constraints,
-runtime directories, and verification guidance.
+Each CI job runs the quality gates, packages NiceGUI, pywebview, prompts, default
+configuration, MarkItDown and PDFium, and smoke-tests the packaged CLI,
+extraction, and NiceGUI server without a provider. Personal configuration, keys,
+source PDFs, and artifacts are excluded. Frozen apps keep their data in the same
+per-user directories as before. XeLaTeX remains external for reviewed PDF export.
+The packages are unsigned; see [packaging notes](docs/packaging.md) for runtime
+requirements and verification limits.
 
 ## CLI workflow
 
@@ -308,6 +319,9 @@ contains:
 - loopback web host/port, upload/page/glossary limits, status polling, and bounded
   local concurrency.
 
+The `[desktop]` section sets initial and minimum window dimensions. Existing
+personal TOML files must copy this section from `config/default.toml`.
+
 Personal files should use `config/*.local.toml`, which Git ignores. Unknown keys,
 missing settings, invalid enum values, and out-of-range settings fail before work
 begins. Relative paths resolve from the selected TOML file's directory. Resolved
@@ -332,10 +346,13 @@ flags, never the key value.
 
 ### Provider and language choices
 
-The model dropdown includes Gemini 3.8 Flash (`gemini-3.8-flash`, the default),
-GPT-6 Astra (`gpt-6-astra`), and Claude Opus 5.5 (`claude-opus-5-5`). Selecting a
+The model dropdown includes only Gemini 3.8 Flash (`gemini-3.8-flash`, the default)
+from Google; GPT-6 Astra (`gpt-6-astra`), GPT-6.1 Sol (`gpt-6.1-sol`), and
+GPT-6 Luna (`gpt-6-luna`) from OpenAI; and Claude Opus 5.5 (`claude-opus-5-5`),
+Sonnet 5.5 (`claude-sonnet-5-5`), and Haiku 5.5 (`claude-haiku-5-5`) from Anthropic. Selecting a
 model routes both page translation and table reconstruction to its provider.
-Settings switches to that provider's API key. **Save on this computer** stores
+The **API Keys** dialog in Settings manages all provider keys independently of
+the selected model. **Save on this computer** stores
 Gemini in the existing ignored `.env`; OpenAI and Anthropic keys are stored
 separately in the ignored `.provider-keys` credential cache beside it. These
 files use mode 0600 on POSIX. Clearing one key leaves other keys intact.
@@ -343,6 +360,19 @@ No key is stored in browser local storage, public API responses, or translation
 artifacts. Unchecked keys remain in session memory. CLI users may also supply
 `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` in their process environment. API access
 and billing belong to the respective provider account.
+
+Thinking defaults to **Provider default**, which omits an explicit override.
+Gemini exposes low/medium/high; OpenAI and Anthropic also expose xhigh/max.
+The adapter maps these to Gemini `thinking_config.thinking_level`, OpenAI
+`reasoning.effort`, or Anthropic adaptive thinking plus `output_config.effort`.
+Choices and defaults come from TOML. Existing personal TOML files need the new
+`[workbench]`, `[workbench.style_prompts]`, and provider thinking fields from
+`config/default.toml`. The app does not rewrite a personal config.
+
+Model and thinking references: [OpenAI models](https://developers.openai.com/api/docs/models),
+[Claude models](https://platform.claude.com/docs/en/models/overview),
+[Claude effort](https://platform.claude.com/docs/en/build-with-claude/effort), and
+[Gemini thinking](https://ai.google.dev/gemini-api/docs/thinking).
 
 Both language dropdowns use `web.language_choices`, with **Custom** last for a
 manually entered language. A configured language outside the list automatically
@@ -510,7 +540,8 @@ rather than being attached to a guessed run.
 │   │   ├── llm/                    # Provider SDK boundaries
 │   │   ├── secrets/                # narrow local GEMINI_API_KEY persistence
 │   │   └── storage/                # atomic machine and revision artifacts
-│   ├── interfaces/web/             # FastAPI endpoints + tabbed local UI
+│   ├── interfaces/web/             # Strict local FastAPI application API
+│   ├── interfaces/desktop/         # NiceGUI controls + editorial component
 │   └── prompts/                    # versioned prompt resources
 └── tests/
     ├── unit/
@@ -540,7 +571,8 @@ uv lock --check
 Normal tests never contact Gemini. They generate synthetic PDFs in temporary
 directories, mock provider responses, and use fake providers for end-to-end
 execution. Interface tests use an in-process FastAPI client and fake job/provider
-boundaries. A future live test must be explicitly marked `live`, require an
+boundaries. NiceGUI simulation tests also exercise desktop selections, credentials,
+and glossary submission through that API. A future live test must be explicitly marked `live`, require an
 opt-in flag as well as a key, and remain excluded from ordinary verification.
 
 Gemini failures retain only a safe HTTP code/status and operator guidance. Raw

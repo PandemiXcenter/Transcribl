@@ -7,19 +7,19 @@ from importlib.resources import files
 from transcribl.domain.enums import BlockType, SegmentHandling
 from transcribl.domain.models import PageTranslation, TranslationSettings
 
-PROMPT_VERSION = "translate-page-v10"
-TABLE_PROMPT_VERSION = "reconstruct-tables-v2"
+PROMPT_VERSION = "translate-page-v11"
+TABLE_PROMPT_VERSION = "reconstruct-tables-v3"
 
 
 @lru_cache(maxsize=1)
 def _prompt_preamble() -> str:
-    resource = files("transcribl.prompts").joinpath("translate_page_v10.md")
+    resource = files("transcribl.prompts").joinpath("translate_page_v11.md")
     return resource.read_text(encoding="utf-8").strip()
 
 
 @lru_cache(maxsize=1)
 def _table_prompt_preamble() -> str:
-    resource = files("transcribl.prompts").joinpath("reconstruct_tables_v2.md")
+    resource = files("transcribl.prompts").joinpath("reconstruct_tables_v3.md")
     return resource.read_text(encoding="utf-8").strip()
 
 
@@ -178,3 +178,13 @@ def _previous_page_context(
     ]
     encoded = json.dumps(projection, ensure_ascii=False, indent=2)
     return f"PREVIOUS_TRANSLATED_PAGES_START\n{encoded}\nPREVIOUS_TRANSLATED_PAGES_END"
+
+
+def prompt_templates() -> dict[str, str]:
+    """The verbatim instructions used by both providers and the Settings viewer."""
+    return {
+        "translation_version": PROMPT_VERSION,
+        "translation": _prompt_preamble(),
+        "table_version": TABLE_PROMPT_VERSION,
+        "table": _table_prompt_preamble(),
+    }

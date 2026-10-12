@@ -13,7 +13,7 @@ projections, not databases.
 ## Dependency direction
 
 ```text
-CLI commands                  browser assets
+CLI commands                  NiceGUI desktop
       \                            |
        \                       FastAPI interface
         \                          /
@@ -33,12 +33,16 @@ CLI commands                  browser assets
 - `cli.py` owns command inputs and starts the local server; it does not own
   business rules.
 - `interfaces/web/` owns HTTP schemas, CSRF/upload handling, JSON projections, and
-  the static tabbed interface. It calls application services and never reads
+  the API mounted at `/backend` by NiceGUI. It calls application services and never reads
   canonical metadata from Markdown.
+- `interfaces/desktop/` owns NiceGUI widgets, per-window ephemeral state, and the
+  isolated editorial HTML/JS component. `DesktopSession` calls the strict API in
+  process with ASGITransport; it makes no network calls. The editorial component
+  uses the same API over loopback, with CSRF tokens and no-store responses.
 - Gemini SDK types never leave `adapters/llm/gemini.py`.
 - Browser code never calls Gemini, MarkItDown, or filesystem adapters directly.
 
-## Local web execution
+## Desktop execution
 
 The short launcher constructs the same pipeline and provider adapter used by the
 CLI, then starts FastAPI/Uvicorn on the configured loopback host and port. It
@@ -49,10 +53,43 @@ checked-in default:
 uv run app
 ```
 
-The launcher waits for Uvicorn to report that the configured loopback server is
-ready, then opens its URL in the operating system's default browser when
-`web.open_browser_on_start` is enabled. Browser-launch failure is non-fatal and
-leaves the server available at the printed local address.
+NiceGUI runs the loopback FastAPI/Uvicorn server and opens a native pywebview
+window. `uv run transcribl serve` uses the same NiceGUI interface in a browser for
+development. `[desktop]` owns window size and minimum dimensions; `[web]` keeps
+its API limits, loopback address, polling and job controls. `web.open_browser_on_start`
+applies only to browser mode. Closing the native window stops the server; it does
+not create a durable queue. Native download support is enabled for all reviewed
+formats, and closing the window asks for confirmation to protect unsaved drafts.
+
+Translate, Glossaries, and Settings use NiceGUI components. Articles is a scoped
+custom component mounted directly in the NiceGUI page, without an iframe or a
+second frontend application. The component retains the proven delegated editing,
+Unicode offsets, complete-document rendering, and translated-pane scroll driver.
+All sections remain mounted when hidden. JSON document content is inserted with
+safe text operations; only checked-in component markup bypasses HTML sanitization.
+Session keys stay in window-specific process memory, are never put in NiceGUI
+storage, and are cleared on client deletion. Reconnect message history is disabled
+to avoid retaining cleared key input values.
+
+Settings opens from the top-right gear, outside the three main tabs. Saved
+defaults are separate from per-job selections. Strict `WorkbenchPreferences`
+are initialized from TOML and saved atomically to `.settings.toml` under the
+artifact root via a repository port. `PUT /api/settings` requires CSRF and an
+optimistic revision, validates model/style/glossary choices, and never accepts
+secrets. The API resolves a fresh config copy when a job is submitted; active
+and recovered runs retain their original snapshots. A missing default glossary
+must be replaced explicitly; it is never silently substituted on API submission.
+
+The selected style name and exact instructions are additive optional fields in
+`TranslationSettings`; old documents remain readable. Custom styles use the
+`custom` enum value plus their saved name. Prompt contracts `translate-page-v11`
+and `reconstruct-tables-v3` apply style instructions within the existing factual
+and structural constraints. The Settings prompt viewer reads the same versioned
+resources used by the pipeline. It shows the instructions verbatim and explains
+the page-specific data appended by prompt assembly. Provider thinking overrides
+are semantic descriptor values, so both pass fingerprints change when they do.
+
+The API paths below are relative to the `/backend` mount in desktop/browser mode.
 
 The server boundary is intentionally small:
 
@@ -105,21 +142,24 @@ service.
 
 ## Frozen executable boundary
 
-`uv run compile --windows`, `--mac`, or `--linux` invokes the uv-managed
-PyInstaller build adapter. Builds are deliberately native: the requested flag
-must match the host operating system. One console-capable executable contains the
-Python runtime, application graph, prompt resources, web assets, MarkItDown data,
-and PDFium binaries. Console mode is retained because the same file must support
-both the no-argument local workbench and the complete Typer CLI.
+Only `.github/workflows/desktop-build.yml` produces distributions: macOS ARM64
+on `macos-15` and Windows x64 on `windows-2025`. The Actions-owned PyInstaller spec
+rejects non-CI and mismatched architecture hosts. It packages an application
+folder (a `.app` bundle on macOS) with NiceGUI assets, pywebview, extraction data,
+provider SDKs, prompts and the checked-in default TOML. No local build command or
+Linux distribution remains. The document compilation CLI remains unchanged.
 
-The frozen entry point launches the workbench when it receives no arguments and
-delegates all other arguments to `cli.app`; pipeline logic remains in the same
-application/composition layers. At runtime, the bundled default TOML is atomically
-refreshed into the native per-user application-data directory. A sibling
-`personal.local.toml`, `.env`, and artifact root are persistent and external to
-the bundle. This prevents PyInstaller's temporary one-file extraction directory
-from becoming configuration, secret, or canonical-artifact storage. XeLaTeX is
-not bundled and remains an explicit constrained external adapter.
+`executable.py` calls `multiprocessing.freeze_support()` before importing the GUI
+or CLI, which allows NiceGUI's native subprocess to start safely in frozen mode.
+No arguments launch the desktop; other arguments retain the complete Typer CLI.
+Runtime config is atomically materialized into the same per-user data directory,
+preserving personal TOML, `.env`, `.provider-keys`, glossaries, canonical artifacts,
+and append-only reviews outside the bundle. XeLaTeX remains external.
+
+Both workflow jobs run tests and then smoke-test the actual packaged CLI,
+synthetic PDF extraction, NiceGUI page and API. They do not exercise live providers
+or imply native-window, signing, notarization or distribution testing has passed.
+See `docs/packaging.md` for artifact names and runtime prerequisites.
 
 ## Preparation
 
@@ -195,9 +235,9 @@ Never overload the phrase “page number”:
 
 Every request contains exactly one current-page PNG, that page's complete
 Markdown, and the fully resolved translation settings. The primary pass uses
-`translate-page-v10`. When that pass tags at least one table or table-like region,
+`translate-page-v11`. When that pass tags at least one table or table-like region,
 the pipeline immediately makes one additional batched request for that page using
-`reconstruct-tables-v2`; it sends the same PNG and complete page MarkItDown/OCR,
+`reconstruct-tables-v3`; it sends the same PNG and complete page MarkItDown/OCR,
 plus the first-pass segmentation and exact table targets. Multiple table regions
 on one page do not create multiple follow-ups.
 
@@ -512,7 +552,7 @@ implemented.
 
 ## Tabbed colleague interface
 
-The browser interface is intentionally operational rather than promotional:
+The NiceGUI desktop interface is a compact research workbench:
 
 - **Translate** selects a PDF and per-job input/output languages. TOML supplies
   the defaults; the checked-in direction is Danish to English. Job settings also

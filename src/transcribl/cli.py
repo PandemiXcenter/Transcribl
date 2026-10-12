@@ -1,12 +1,8 @@
 from __future__ import annotations
 
-import time
-import webbrowser
-from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from threading import Thread
-from typing import Annotated, Never, Protocol
+from typing import Annotated, Never
 
 import typer
 from rich.console import Console
@@ -35,11 +31,6 @@ LOCAL_CONFIG_PATH = _RUNTIME_PATHS.personal_config
 class RuntimeContext:
     config_path: Path
     config: ProjectConfig
-
-
-class StartupAwareServer(Protocol):
-    started: bool
-    should_exit: bool
 
 
 @app.callback()
@@ -186,7 +177,7 @@ def show_config(context: typer.Context) -> None:
 
 @app.command()
 def serve(context: typer.Context) -> None:
-    """Run the local browser editor."""
+    """Run the NiceGUI workbench in a local browser (development mode)."""
 
     runtime = _runtime(context)
     _serve_app(runtime.config)
@@ -201,63 +192,19 @@ def launch_app() -> None:
     except TranscriblError as exc:
         error_console.print(f"[red]{type(exc).__name__}:[/red] {exc}")
         raise SystemExit(1) from exc
-    _serve_app(config)
+    _launch_desktop(config)
 
 
 def _serve_app(config: ProjectConfig) -> None:
-    import uvicorn
+    from transcribl.interfaces.desktop.app import run_desktop
 
-    from transcribl.interfaces.web import create_app
-
-    server = uvicorn.Server(
-        uvicorn.Config(
-            create_app(config),
-            host=config.web.host,
-            port=config.web.port,
-        )
-    )
-    if config.web.open_browser_on_start:
-        Thread(
-            target=_open_browser_when_started,
-            args=(server, _local_web_url(config.web.host, config.web.port), _open_browser),
-            daemon=True,
-            name="transcribl-browser",
-        ).start()
-    server.run()
+    run_desktop(config, native=False)
 
 
-def _local_web_url(host: str, port: int) -> str:
-    rendered_host = f"[{host}]" if ":" in host else host
-    return f"http://{rendered_host}:{port}"
+def _launch_desktop(config: ProjectConfig) -> None:
+    from transcribl.interfaces.desktop.app import run_desktop
 
-
-def _open_browser(url: str) -> bool:
-    return webbrowser.open(url, new=2)
-
-
-def _open_browser_when_started(
-    server: StartupAwareServer,
-    url: str,
-    opener: Callable[[str], bool],
-    *,
-    poll_interval_seconds: float = 0.05,
-) -> None:
-    while not server.started and not server.should_exit:
-        time.sleep(poll_interval_seconds)
-    if not server.started:
-        return
-    try:
-        opened = opener(url)
-    except Exception as exc:  # A desktop integration failure must not stop the server.
-        error_console.print(
-            f"[yellow]Could not open the default browser ({type(exc).__name__}). "
-            f"Open {url} manually.[/yellow]"
-        )
-        return
-    if not opened:
-        error_console.print(
-            f"[yellow]Could not open the default browser. Open {url} manually.[/yellow]"
-        )
+    run_desktop(config)
 
 
 def _translate(

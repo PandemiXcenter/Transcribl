@@ -1,4 +1,4 @@
-:root {
+.research-editor{
   color-scheme: light;
   --canvas: #f3f1ec;
   --surface: #fff;
@@ -17,39 +17,32 @@
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
 }
-
-* {
+.research-editor *{
   box-sizing: border-box;
 }
-
-html {
+.research-editor{
   min-width: 320px;
 }
-
-body {
+.research-editor{
   min-height: 100vh;
   margin: 0;
   color: var(--ink);
   background: var(--canvas);
 }
-
-button,
-input,
-select,
-textarea {
+.research-editor button,
+.research-editor input,
+.research-editor select,
+.research-editor textarea{
   font: inherit;
 }
-
-button,
-a {
+.research-editor button,
+.research-editor a{
   -webkit-tap-highlight-color: transparent;
 }
-
-[hidden] {
+.research-editor [hidden]{
   display: none !important;
 }
-
-.app-header {
+.research-editor .app-header{
   display: flex;
   height: 64px;
   align-items: center;
@@ -58,8 +51,7 @@ a {
   border-bottom: 1px solid var(--line);
   background: var(--surface);
 }
-
-.wordmark {
+.research-editor .wordmark{
   display: inline-flex;
   gap: 0.7rem;
   align-items: center;
@@ -67,8 +59,7 @@ a {
   font-weight: 720;
   text-decoration: none;
 }
-
-.wordmark-mark {
+.research-editor .wordmark-mark{
   display: grid;
   width: 32px;
   height: 32px;
@@ -79,15 +70,13 @@ a {
   font-size: 0.75rem;
   letter-spacing: 0.04em;
 }
-
-.local-label {
+.research-editor .local-label{
   color: var(--muted);
   font-size: 0.72rem;
   letter-spacing: 0.07em;
   text-transform: uppercase;
 }
-
-.tab-bar {
+.research-editor .tab-bar{
   display: flex;
   height: 48px;
   gap: 0.25rem;
@@ -97,8 +86,7 @@ a {
   background: var(--surface);
   overflow-x: auto;
 }
-
-.tab-button {
+.research-editor .tab-button{
   height: 48px;
   padding: 0 1rem;
   border: 0;
@@ -110,33 +98,27 @@ a {
   font-weight: 680;
   white-space: nowrap;
 }
-
-.tab-button:hover:not(:disabled) {
+.research-editor .tab-button:hover:not(:disabled){
   color: var(--ink);
 }
-
-.tab-button[aria-selected="true"] {
+.research-editor .tab-button[aria-selected="true"]{
   border-bottom-color: var(--accent);
   color: var(--ink);
 }
-
-.tab-button:disabled {
+.research-editor .tab-button:disabled{
   cursor: not-allowed;
   opacity: 0.42;
 }
-
-.workspace {
+.research-editor .workspace{
   width: min(1180px, calc(100% - 48px));
   margin: 0 auto;
   padding: 2rem 0 3rem;
 }
-
-.tab-panel {
+.research-editor .tab-panel{
   outline: 0;
 }
-
-.panel-header,
-.review-toolbar {
+.research-editor .panel-header,
+.research-editor .review-toolbar{
   display: flex;
   min-height: 72px;
   gap: 2rem;
@@ -144,52 +126,45 @@ a {
   justify-content: space-between;
   margin-bottom: 1.25rem;
 }
-
-.panel-header h1,
-.review-toolbar h1 {
+.research-editor .panel-header h1,
+.research-editor .review-toolbar h1{
   margin: 0;
   font-family: Georgia, "Times New Roman", serif;
   font-size: clamp(1.8rem, 3.5vw, 2.6rem);
   font-weight: 500;
   letter-spacing: -0.025em;
 }
-
-.panel-header p,
-.review-document {
+.research-editor .panel-header p,
+.research-editor .review-document{
   margin: 0.35rem 0 0;
   color: var(--muted);
   font-size: 0.86rem;
 }
-
-.form-card,
-.table-card,
-.settings-card,
-.progress-card {
+.research-editor .form-card,
+.research-editor .table-card,
+.research-editor .settings-card,
+.research-editor .progress-card{
   border: 1px solid var(--line);
   border-top: 3px solid var(--ink);
   background: var(--surface);
   box-shadow: 0 10px 32px rgb(36 35 33 / 6%);
 }
-
-.form-card {
+.research-editor .form-card{
   padding: clamp(1.5rem, 4vw, 2.5rem);
 }
-
-.field-group {
+.research-editor .field-group{
   max-width: 760px;
 }
-
-.field-label {
+.research-editor .field-label{
   display: grid;
   gap: 0.5rem;
   color: var(--ink);
   font-size: 0.75rem;
   font-weight: 700;
 }
-
-.field-label input,
-.field-label select,
-.field-label textarea {
+.research-editor .field-label input,
+.research-editor .field-label select,
+.research-editor .field-label textarea{
   width: 100%;
   min-height: 44px;
   padding: 0.65rem 0.75rem;
@@ -199,34 +174,29 @@ a {
   background: var(--surface);
   font-weight: 450;
 }
-
-.field-label textarea {
+.research-editor .field-label textarea{
   resize: vertical;
 }
-
-.field-label small,
-.checkbox-field small {
+.research-editor .field-label small,
+.research-editor .checkbox-field small{
   color: var(--muted);
   font-size: 0.68rem;
   font-weight: 450;
   line-height: 1.45;
 }
-
-.field-label input:focus,
-.field-label select:focus,
-.field-label textarea:focus {
+.research-editor .field-label input:focus,
+.research-editor .field-label select:focus,
+.research-editor .field-label textarea:focus{
   border-color: var(--focus);
   outline: 2px solid var(--focus);
   outline-offset: 1px;
 }
-
-.field-label input[aria-invalid="true"],
-.field-label select[aria-invalid="true"],
-.field-label textarea[aria-invalid="true"] {
+.research-editor .field-label input[aria-invalid="true"],
+.research-editor .field-label select[aria-invalid="true"],
+.research-editor .field-label textarea[aria-invalid="true"]{
   border-color: var(--danger);
 }
-
-.drop-zone {
+.research-editor .drop-zone{
   display: grid;
   grid-template-columns: 42px 1fr;
   gap: 0 1rem;
@@ -238,44 +208,37 @@ a {
   cursor: pointer;
   transition: border-color 120ms ease, background 120ms ease;
 }
-
-.drop-zone:hover,
-.drop-zone:focus-within,
-.drop-zone.is-dragging {
+.research-editor .drop-zone:hover,
+.research-editor .drop-zone:focus-within,
+.research-editor .drop-zone.is-dragging{
   border-color: var(--accent);
   background: #fffaf4;
 }
-
-.drop-zone.has-error {
+.research-editor .drop-zone.has-error{
   border-color: var(--danger);
 }
-
-.drop-zone input {
+.research-editor .drop-zone input{
   position: absolute;
   width: 1px;
   height: 1px;
   opacity: 0;
 }
-
-.drop-zone strong,
-.drop-zone span:last-child {
+.research-editor .drop-zone strong,
+.research-editor .drop-zone span:last-child{
   grid-column: 2;
 }
-
-.drop-zone span:last-child {
+.research-editor .drop-zone span:last-child{
   margin-top: 0.2rem;
   color: var(--muted);
   font-size: 0.76rem;
 }
-
-.upload-icon {
+.research-editor .upload-icon{
   grid-row: 1 / span 2;
   color: var(--accent);
   font-family: Georgia, "Times New Roman", serif;
   font-size: 1.9rem;
 }
-
-.language-grid {
+.research-editor .language-grid{
   display: grid;
   max-width: 760px;
   grid-template-columns: 1fr 36px 1fr;
@@ -283,24 +246,20 @@ a {
   align-items: end;
   margin-top: 1.75rem;
 }
-
-.language-arrow {
+.research-editor .language-arrow{
   display: grid;
   height: 44px;
   place-items: center;
   color: var(--muted);
 }
-
-.job-wide-field {
+.research-editor .job-wide-field{
   grid-column: 1 / -1;
 }
-
-.job-wide-field textarea {
+.research-editor .job-wide-field textarea{
   min-height: 5.5rem;
   resize: vertical;
 }
-
-.form-footer {
+.research-editor .form-footer{
   display: flex;
   gap: 2rem;
   align-items: end;
@@ -310,43 +269,37 @@ a {
   border-top: 1px solid var(--line);
   background: var(--surface-subtle);
 }
-
-.privacy-note {
+.research-editor .privacy-note{
   max-width: 580px;
   margin: 0;
   color: var(--muted);
   font-size: 0.75rem;
   line-height: 1.55;
 }
-
-.submit-actions {
+.research-editor .submit-actions{
   display: grid;
   flex: none;
   gap: 0.5rem;
 }
-
-.field-error {
+.research-editor .field-error{
   margin: 0.55rem 0 0;
   color: var(--danger);
   font-size: 0.75rem;
   line-height: 1.45;
 }
-
-.submit-error {
+.research-editor .submit-error{
   max-width: 330px;
   margin: 0;
   text-align: right;
 }
-
-.progress-retention-note {
+.research-editor .progress-retention-note{
   flex-basis: 100%;
   margin: 0 0 0.25rem;
   color: var(--muted);
   font-size: 0.78rem;
 }
-
-.primary-button,
-.secondary-button {
+.research-editor .primary-button,
+.research-editor .secondary-button{
   display: inline-flex;
   min-height: 42px;
   align-items: center;
@@ -358,52 +311,44 @@ a {
   font-weight: 720;
   text-decoration: none;
 }
-
-.primary-button {
+.research-editor .primary-button{
   color: white;
   background: var(--accent);
 }
-
-.primary-button:hover {
+.research-editor .primary-button:hover{
   background: var(--accent-dark);
 }
-
-.secondary-button {
+.research-editor .secondary-button{
   border-color: var(--line-dark);
   color: var(--ink);
   background: var(--surface);
 }
-
-.secondary-button:hover {
+.research-editor .secondary-button:hover{
   border-color: var(--ink);
 }
-
-.compact-control {
+.research-editor .compact-control{
   min-height: 36px;
   padding: 0.55rem 0.85rem;
 }
-
-.primary-button:disabled,
-.secondary-button:disabled,
-.text-button:disabled {
+.research-editor .primary-button:disabled,
+.research-editor .secondary-button:disabled,
+.research-editor .text-button:disabled{
   cursor: wait;
   opacity: 0.55;
 }
-
-.primary-button:focus-visible,
-.secondary-button:focus-visible,
-.text-button:focus-visible,
-.export-menu summary:focus-visible,
-.export-menu-options a:focus-visible,
-.remove-row:focus-visible,
-.tab-button:focus-visible,
-.dialog-close:focus-visible,
-.global-alert button:focus-visible {
+.research-editor .primary-button:focus-visible,
+.research-editor .secondary-button:focus-visible,
+.research-editor .text-button:focus-visible,
+.research-editor .export-menu summary:focus-visible,
+.research-editor .export-menu-options a:focus-visible,
+.research-editor .remove-row:focus-visible,
+.research-editor .tab-button:focus-visible,
+.research-editor .dialog-close:focus-visible,
+.research-editor .global-alert button:focus-visible{
   outline: 3px solid var(--focus);
   outline-offset: 2px;
 }
-
-.text-button {
+.research-editor .text-button{
   padding: 0.3rem 0;
   border: 0;
   border-bottom: 1px solid currentcolor;
@@ -413,8 +358,7 @@ a {
   font-size: 0.78rem;
   font-weight: 700;
 }
-
-.global-alert {
+.research-editor .global-alert{
   position: fixed;
   z-index: 30;
   top: 124px;
@@ -432,8 +376,7 @@ a {
   font-size: 0.82rem;
   line-height: 1.45;
 }
-
-.global-alert button {
+.research-editor .global-alert button{
   flex: none;
   border: 0;
   color: currentcolor;
@@ -441,21 +384,16 @@ a {
   cursor: pointer;
   font-size: 1.15rem;
 }
-
-/* Term mappings */
-
-.table-card {
+.research-editor .table-card{
   padding: 0 1.5rem 1.5rem;
   overflow-x: auto;
 }
-
-table {
+.research-editor table{
   width: 100%;
   min-width: 560px;
   border-collapse: collapse;
 }
-
-th {
+.research-editor th{
   padding: 1rem 0.65rem 0.75rem;
   color: var(--muted);
   font-size: 0.66rem;
@@ -463,13 +401,11 @@ th {
   text-align: left;
   text-transform: uppercase;
 }
-
-td {
+.research-editor td{
   padding: 0.35rem 0.25rem;
   border-top: 1px solid var(--line);
 }
-
-td input {
+.research-editor td input{
   width: 100%;
   min-width: 150px;
   padding: 0.7rem 0.5rem;
@@ -477,18 +413,15 @@ td input {
   color: var(--ink);
   background: transparent;
 }
-
-td input:focus {
+.research-editor td input:focus{
   border-color: var(--focus);
   outline: 1px solid var(--focus);
   background: white;
 }
-
-td input[aria-invalid="true"] {
+.research-editor td input[aria-invalid="true"]{
   border-color: var(--danger);
 }
-
-.remove-row {
+.research-editor .remove-row{
   width: 32px;
   height: 32px;
   border: 0;
@@ -496,155 +429,126 @@ td input[aria-invalid="true"] {
   background: transparent;
   cursor: pointer;
 }
-
-.empty-message {
+.research-editor .empty-message{
   margin: 1.1rem 0 0;
   color: var(--muted);
   font-size: 0.78rem;
 }
-
-/* Settings */
-
-.job-settings {
+.research-editor .job-settings{
   padding: 1rem;
   border: 1px solid var(--line);
   background: var(--surface-subtle);
 }
-
-.job-settings-heading h2,
-.job-settings-heading p {
+.research-editor .job-settings-heading h2,
+.research-editor .job-settings-heading p{
   margin: 0;
 }
-
-.job-settings-heading h2 {
+.research-editor .job-settings-heading h2{
   font-size: 0.88rem;
 }
-
-.job-settings-heading p {
+.research-editor .job-settings-heading p{
   margin-top: 0.2rem;
   color: var(--muted);
   font-size: 0.72rem;
 }
-
-.job-settings-grid {
+.research-editor .job-settings-grid{
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.9rem 1rem;
   margin-top: 0.9rem;
 }
-
-.job-settings-grid small {
+.research-editor .job-settings-grid small{
   display: block;
   margin-top: 0.3rem;
   color: var(--muted);
   font-weight: 400;
   line-height: 1.4;
 }
-
-.uncertainty-job-setting .compact-action {
+.research-editor .uncertainty-job-setting .compact-action{
   justify-self: start;
 }
-
-.optional-instructions {
+.research-editor .optional-instructions{
   display: grid;
   gap: 0.5rem;
   margin-top: 0.15rem;
 }
-
-.settings-card {
+.research-editor .settings-card{
   display: grid;
   grid-template-columns: 1fr 1fr;
 }
-
-.settings-section {
+.research-editor .settings-section{
   display: grid;
   align-content: start;
   gap: 1.3rem;
   padding: clamp(1.5rem, 4vw, 2.5rem);
 }
-
-.settings-section + .settings-section {
+.research-editor .settings-section + .settings-section{
   border-left: 1px solid var(--line);
 }
-
-.settings-section h2 {
+.research-editor .settings-section h2{
   margin: 0 0 0.25rem;
   font-family: Georgia, "Times New Roman", serif;
   font-size: 1.3rem;
   font-weight: 500;
 }
-
-.checkbox-field {
+.research-editor .checkbox-field{
   display: flex;
   gap: 0.65rem;
   align-items: start;
   font-size: 0.8rem;
   font-weight: 650;
 }
-
-.checkbox-field input {
+.research-editor .checkbox-field input{
   width: 17px;
   height: 17px;
   margin: 0.1rem 0 0;
   accent-color: var(--accent);
 }
-
-.checkbox-field span {
+.research-editor .checkbox-field span{
   display: grid;
   gap: 0.25rem;
 }
-
-.job-toggle {
+.research-editor .job-toggle{
   align-self: center;
   padding: 0.65rem 0;
 }
-
-.settings-actions {
+.research-editor .settings-actions{
   display: flex;
   gap: 1rem;
   align-items: center;
 }
-
-.settings-message {
+.research-editor .settings-message{
   min-height: 1.2em;
   margin: -0.35rem 0 0;
   color: var(--success);
   font-size: 0.72rem;
 }
-
-.danger-button {
+.research-editor .danger-button{
   color: var(--danger);
 }
-
-/* Progress */
-
-.progress-card {
+.research-editor .progress-card{
   padding: clamp(1.5rem, 4vw, 2.5rem);
 }
-
-.progress-heading-row {
+.research-editor .progress-heading-row{
   display: flex;
   gap: 2rem;
   align-items: start;
   justify-content: space-between;
   margin-bottom: 2.2rem;
 }
-
-.progress-heading-row h2 {
+.research-editor .progress-heading-row h2{
   margin: 0;
   font-family: Georgia, "Times New Roman", serif;
   font-size: 1.55rem;
   font-weight: 500;
 }
-
-.progress-file {
+.research-editor .progress-file{
   margin: 0.35rem 0 0;
   color: var(--muted);
   font-size: 0.78rem;
   overflow-wrap: anywhere;
 }
-
-.status-badge {
+.research-editor .status-badge{
   padding: 0.35rem 0.55rem;
   border: 1px solid var(--line);
   color: var(--muted);
@@ -654,14 +558,12 @@ td input[aria-invalid="true"] {
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
-
-.progress-announcement {
+.research-editor .progress-announcement{
   min-height: 1.5em;
   margin-bottom: 0.75rem;
   font-size: 0.86rem;
 }
-
-progress {
+.research-editor progress{
   width: 100%;
   height: 8px;
   border: 0;
@@ -670,43 +572,33 @@ progress {
   background: var(--line);
   appearance: none;
 }
-
-progress::-webkit-progress-bar {
+.research-editor progress::-webkit-progress-bar{
   background: var(--line);
 }
-
-progress::-webkit-progress-value {
+.research-editor progress::-webkit-progress-value{
   background: var(--accent);
   transition: width 250ms ease;
 }
-
-progress::-moz-progress-bar {
+.research-editor progress::-moz-progress-bar{
   background: var(--accent);
 }
-
-.progress-meta {
+.research-editor .progress-meta{
   margin-top: 0.65rem;
   color: var(--muted);
   font-size: 0.72rem;
 }
-
-.progress-actions {
+.research-editor .progress-actions{
   margin-top: 1.5rem;
 }
-
-/* Articles and review */
-
-.review-library {
+.research-editor .review-library{
   max-width: 980px;
   margin: 0 auto;
 }
-
-.review-list {
+.research-editor .review-list{
   display: grid;
   gap: 0.75rem;
 }
-
-.review-list-card {
+.research-editor .review-list-card{
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 1rem;
@@ -715,43 +607,35 @@ progress::-moz-progress-bar {
   border: 1px solid var(--line);
   background: var(--surface);
 }
-
-.review-list-card h2,
-.review-list-card p {
+.research-editor .review-list-card h2,
+.research-editor .review-list-card p{
   margin: 0;
 }
-
-.review-list-actions {
+.research-editor .review-list-actions{
   display: flex;
   gap: 0.55rem;
   align-items: center;
 }
-
-.export-menu {
+.research-editor .export-menu{
   position: relative;
 }
-
-.export-menu summary {
+.research-editor .export-menu summary{
   box-sizing: border-box;
   list-style: none;
   user-select: none;
 }
-
-.export-menu summary::-webkit-details-marker {
+.research-editor .export-menu summary::-webkit-details-marker{
   display: none;
 }
-
-.export-menu summary::after {
+.research-editor .export-menu summary::after{
   margin-left: 0.55rem;
   content: "▾";
   font-size: 0.66rem;
 }
-
-.export-menu[open] summary {
+.research-editor .export-menu[open] summary{
   border-color: var(--ink);
 }
-
-.export-menu-options {
+.research-editor .export-menu-options{
   position: absolute;
   z-index: 20;
   top: calc(100% + 0.35rem);
@@ -764,8 +648,7 @@ progress::-moz-progress-bar {
   background: var(--surface);
   box-shadow: 0 12px 32px rgb(36 35 33 / 18%);
 }
-
-.export-menu-options a {
+.research-editor .export-menu-options a{
   padding: 0.65rem 0.7rem;
   color: var(--ink);
   font-size: 0.74rem;
@@ -773,61 +656,50 @@ progress::-moz-progress-bar {
   text-decoration: none;
   white-space: nowrap;
 }
-
-.export-menu-options a:hover {
+.research-editor .export-menu-options a:hover{
   background: var(--surface-subtle);
 }
-
-.review-list-card h2 {
+.research-editor .review-list-card h2{
   font-family: Georgia, "Times New Roman", serif;
   font-size: 1rem;
   font-weight: 500;
 }
-
-.review-list-card p {
+.research-editor .review-list-card p{
   margin-top: 0.35rem;
   color: var(--muted);
   font-size: 0.72rem;
 }
-
-.review-editor {
+.research-editor .review-editor{
   height: 100%;
 }
-
-.workspace:has(.review-panel:not([hidden])) {
+.research-editor .workspace:has(.review-panel:not([hidden])){
   width: min(1500px, calc(100% - 40px));
   height: calc(100vh - 112px);
   padding-block: 1.25rem 1.5rem;
 }
-
-.review-panel {
+.research-editor .review-panel{
   height: 100%;
   min-height: 570px;
 }
-
-.review-toolbar {
+.research-editor .review-toolbar{
   min-height: 54px;
   align-items: center;
   margin-bottom: 0.75rem;
 }
-
-.review-toolbar h1 {
+.research-editor .review-toolbar h1{
   font-size: 2rem;
 }
-
-.review-actions {
+.research-editor .review-actions{
   display: flex;
   gap: 1rem;
   align-items: center;
 }
-
-.review-progress {
+.research-editor .review-progress{
   color: var(--muted);
   font-size: 0.73rem;
   white-space: nowrap;
 }
-
-.review-key {
+.research-editor .review-key{
   display: flex;
   min-height: 34px;
   gap: 1.4rem;
@@ -839,31 +711,26 @@ progress::-moz-progress-bar {
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
-
-.review-key span {
+.research-editor .review-key span{
   display: inline-flex;
   gap: 0.4rem;
   align-items: center;
 }
-
-.review-key span:last-child {
+.research-editor .review-key span:last-child{
   margin-left: auto;
 }
-
-.legend-source {
+.research-editor .legend-source{
   width: 12px;
   height: 2px;
   background: var(--accent);
 }
-
-.legend-edited {
+.research-editor .legend-edited{
   width: 12px;
   height: 12px;
   border-left: 3px solid var(--accent);
   background: rgb(156 63 40 / 8%);
 }
-
-.legend-uncertain {
+.research-editor .legend-uncertain{
   display: inline-grid;
   width: 16px;
   height: 16px;
@@ -875,8 +742,7 @@ progress::-moz-progress-bar {
   font-style: normal;
   font-weight: 900;
 }
-
-.review-grid {
+.research-editor .review-grid{
   display: grid;
   height: calc(100% - 96px);
   min-height: 450px;
@@ -886,19 +752,16 @@ progress::-moz-progress-bar {
   background: var(--surface);
   box-shadow: 0 8px 28px rgb(36 35 33 / 6%);
 }
-
-.review-pane {
+.research-editor .review-pane{
   display: grid;
   min-width: 0;
   min-height: 0;
   grid-template-rows: 54px 1fr;
 }
-
-.review-pane + .review-pane {
+.research-editor .review-pane + .review-pane{
   border-left: 1px solid var(--line);
 }
-
-.pane-heading {
+.research-editor .pane-heading{
   display: flex;
   gap: 1rem;
   align-items: center;
@@ -906,34 +769,29 @@ progress::-moz-progress-bar {
   padding: 0 1.25rem;
   border-bottom: 1px solid var(--line);
 }
-
-.pane-heading h2 {
+.research-editor .pane-heading h2{
   margin: 0;
   font-family: Georgia, "Times New Roman", serif;
   font-size: 1.08rem;
   font-weight: 500;
 }
-
-.pane-heading span {
+.research-editor .pane-heading span{
   color: var(--muted);
   font-size: 0.64rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
-
-.pane-heading a {
+.research-editor .pane-heading a{
   color: var(--accent);
   font-size: 0.68rem;
   font-weight: 700;
 }
-
-.source-pane-controls {
+.research-editor .source-pane-controls{
   display: flex;
   gap: 0.75rem;
   align-items: center;
 }
-
-.source-pane-controls label {
+.research-editor .source-pane-controls label{
   display: flex;
   gap: 0.35rem;
   align-items: center;
@@ -941,35 +799,29 @@ progress::-moz-progress-bar {
   font-size: 0.68rem;
   font-weight: 700;
 }
-
-.compact-select {
+.research-editor .compact-select{
   min-width: 4.5rem;
   padding: 0.3rem 0.45rem;
 }
-
-.document-scroll {
+.research-editor .document-scroll{
   min-height: 0;
   scrollbar-color: var(--accent) var(--canvas);
 }
-
-.source-scroll {
+.research-editor .source-scroll{
   overflow: hidden;
   background: #efebe2;
   user-select: text;
 }
-
-.source-image-content {
+.research-editor .source-image-content{
   display: grid;
   height: 100%;
   min-height: 0;
   grid-template-rows: auto minmax(0, 1fr);
 }
-
-.source-image-content .page-label {
+.research-editor .source-image-content .page-label{
   margin-bottom: 0.75rem;
 }
-
-.source-page-image {
+.research-editor .source-page-image{
   width: 100%;
   height: 100%;
   min-height: 0;
@@ -980,31 +832,25 @@ progress::-moz-progress-bar {
   transform: scale(var(--review-page-zoom, 1));
   transform-origin: center top;
 }
-
-.translation-scroll {
+.research-editor .translation-scroll{
   overflow-y: auto;
   overscroll-behavior: contain;
 }
-
-.translation-scroll:focus-visible {
+.research-editor .translation-scroll:focus-visible{
   outline: 3px solid var(--focus);
   outline-offset: -3px;
 }
-
-.document-content {
+.research-editor .document-content{
   padding: clamp(1.25rem, 3vw, 2.5rem);
 }
-
-.review-page {
+.research-editor .review-page{
   padding-bottom: 3.5rem;
 }
-
-.review-page + .review-page {
+.research-editor .review-page + .review-page{
   padding-top: 2rem;
   border-top: 1px solid var(--line);
 }
-
-.page-label {
+.research-editor .page-label{
   display: flex;
   gap: 0.7rem;
   align-items: baseline;
@@ -1015,73 +861,62 @@ progress::-moz-progress-bar {
   letter-spacing: 0.09em;
   text-transform: uppercase;
 }
-
-.page-label span {
+.research-editor .page-label span{
   color: var(--muted);
   font-weight: 500;
   letter-spacing: 0.03em;
   text-transform: none;
 }
-
-.source-block,
-.translation-block {
+.research-editor .source-block,
+.research-editor .translation-block{
   position: relative;
   margin: 0 0 1.5rem;
 }
-
-.source-block {
+.research-editor .source-block{
   padding-left: 0.9rem;
   border-left: 2px solid transparent;
   color: #4f4c47;
 }
-
-.source-block.is-following {
+.research-editor .source-block.is-following{
   border-left-color: var(--accent);
   color: var(--ink);
   background: linear-gradient(90deg, rgb(156 63 40 / 6%), transparent 75%);
 }
-
-.source-block p,
-.translated-editor {
+.research-editor .source-block p,
+.research-editor .translated-editor{
   margin: 0;
   font-family: Georgia, "Times New Roman", serif;
   font-size: clamp(0.96rem, 1.25vw, 1.08rem);
   line-height: 1.72;
   white-space: pre-wrap;
 }
-
-.section-controls {
+.research-editor .section-controls{
   display: flex;
   flex-wrap: wrap;
   gap: 0.7rem;
   align-items: end;
   margin: 0.25rem 0 0.4rem 0.5rem;
 }
-
-.section-controls .compact-field {
+.research-editor .section-controls .compact-field{
   min-width: 150px;
   color: var(--muted);
   font-size: 0.66rem;
 }
-
-.section-controls .footnote-owner-field {
+.research-editor .section-controls .footnote-owner-field{
   flex: 1;
 }
-
-.section-controls .footnote-anchor-help {
+.research-editor .section-controls .footnote-anchor-help{
   flex-basis: 100%;
   margin: 0;
   color: var(--muted);
   font-size: 0.66rem;
   line-height: 1.35;
 }
-
-.block-meta .footnote-owner-badge {
+.research-editor .block-meta .footnote-owner-badge{
   color: var(--focus);
   font-weight: 760;
 }
-
-.footnote-entrypoint-marker {
+.research-editor .footnote-entrypoint-marker{
   display: inline-block;
   margin: 0 0.08em;
   padding: 0.04em 0.22em;
@@ -1095,16 +930,14 @@ progress::-moz-progress-bar {
   line-height: 1;
   user-select: none;
 }
-
-.section-controls select,
-.section-controls input {
+.research-editor .section-controls select,
+.research-editor .section-controls input{
   width: 100%;
   margin-top: 0.2rem;
   padding: 0.35rem 0.45rem;
   font-size: 0.72rem;
 }
-
-.block-meta {
+.research-editor .block-meta{
   display: flex;
   min-height: 20px;
   gap: 0.6rem;
@@ -1115,80 +948,65 @@ progress::-moz-progress-bar {
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
-
-.block-meta .status {
+.research-editor .block-meta .status{
   margin-left: auto;
 }
-
-.block-meta .provenance {
+.research-editor .block-meta .provenance{
   padding-left: 0.55rem;
   border-left: 1px solid var(--line);
   letter-spacing: 0.03em;
   text-transform: none;
 }
-
-.block-meta .provenance.edited {
+.research-editor .block-meta .provenance.edited{
   color: var(--accent);
   font-weight: 760;
 }
-
-.block-meta .classification-warning {
+.research-editor .block-meta .classification-warning{
   color: #6d5316;
   font-weight: 760;
 }
-
-.status.accepted {
+.research-editor .status.accepted{
   color: var(--success);
   font-weight: 760;
 }
-
-.status.needs-work {
+.research-editor .status.needs-work{
   color: var(--danger);
 }
-
-.translated-editor {
+.research-editor .translated-editor{
   min-height: 2.3rem;
   padding: 0.4rem 0.5rem;
   border: 1px solid transparent;
   outline: 0;
   overflow-wrap: anywhere;
 }
-
-.translated-editor:hover {
+.research-editor .translated-editor:hover{
   border-color: var(--line);
 }
-
-.translated-editor:focus {
+.research-editor .translated-editor:focus{
   border-color: var(--focus);
   background: white;
   box-shadow: 0 0 0 2px rgb(36 95 120 / 12%);
 }
-
-.translation-block:not(.paragraph-group).is-dirty .translated-editor {
+.research-editor .translation-block:not(.paragraph-group).is-dirty .translated-editor{
   border-left: 3px solid var(--accent);
 }
-
-.paragraph-group {
+.research-editor .paragraph-group{
   border-left: 3px solid var(--focus);
 }
-
-.merged-paragraph-editor {
+.research-editor .merged-paragraph-editor{
   padding: 0.65rem 0.5rem;
   border: 1px solid transparent;
   line-height: 1.7;
 }
-
-.paragraph-fragment-editor {
+.research-editor .paragraph-fragment-editor{
   display: inline;
   min-height: 0;
   padding: 0.15rem 0.1rem;
 }
-
-.paragraph-fragment-editor.is-dirty {
+.research-editor .paragraph-fragment-editor.is-dirty{
   border-left: 3px solid var(--accent);
 }
-
-.paragraph-page-boundary {
+.research-editor .paragraph-page-boundary{
   display: inline-flex;
   margin: 0 0.3rem;
   padding: 0.12rem 0.38rem;
@@ -1202,62 +1020,52 @@ progress::-moz-progress-bar {
   vertical-align: 0.12em;
   cursor: pointer;
 }
-
-.paragraph-page-boundary:hover,
-.paragraph-page-boundary:focus-visible {
+.research-editor .paragraph-page-boundary:hover,
+.research-editor .paragraph-page-boundary:focus-visible{
   background: rgb(36 95 120 / 10%);
 }
-
-.paragraph-group-help {
+.research-editor .paragraph-group-help{
   margin: 0.35rem 0.5rem 0;
   color: var(--muted);
   font-size: 0.72rem;
 }
-
-.continued-paragraph-block {
+.research-editor .continued-paragraph-block{
   padding-left: 0.75rem;
   border-left: 3px solid var(--focus);
 }
-
-.block-meta .paragraph-continuation {
+.research-editor .block-meta .paragraph-continuation{
   color: var(--focus);
   font-weight: 760;
   letter-spacing: 0.03em;
   text-transform: none;
 }
-
-.manual-insertion-block {
+.research-editor .manual-insertion-block{
   padding: 0.8rem;
   border: 1px dashed var(--line-dark);
   background: #fffaf0;
 }
-
-.manual-insertion-editor {
+.research-editor .manual-insertion-editor{
   min-height: 5rem;
   border-color: var(--line-dark);
   background: var(--surface);
 }
-
-.manual-insertion-editor:empty::before {
+.research-editor .manual-insertion-editor:empty::before{
   color: var(--muted);
   content: attr(data-placeholder);
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
   font-size: 0.78rem;
   font-style: italic;
 }
-
-.machine-text-details {
+.research-editor .machine-text-details{
   margin: 0.55rem 0 0.2rem 0.5rem;
   color: var(--muted);
   font-size: 0.7rem;
 }
-
-.machine-text-details summary {
+.research-editor .machine-text-details summary{
   cursor: pointer;
   font-weight: 700;
 }
-
-.machine-text-details p {
+.research-editor .machine-text-details p{
   margin: 0.45rem 0 0;
   padding: 0.65rem 0.75rem;
   border-left: 2px solid var(--line-dark);
@@ -1267,12 +1075,10 @@ progress::-moz-progress-bar {
   line-height: 1.55;
   white-space: pre-wrap;
 }
-
-.translation-block.is-saving {
+.research-editor .translation-block.is-saving{
   opacity: 0.64;
 }
-
-.block-actions {
+.research-editor .block-actions{
   display: flex;
   min-height: 30px;
   gap: 0.55rem;
@@ -1281,14 +1087,12 @@ progress::-moz-progress-bar {
   opacity: 0;
   transition: opacity 120ms ease;
 }
-
-.translation-block:hover .block-actions,
-.translation-block:focus-within .block-actions,
-.translation-block.is-dirty .block-actions {
+.research-editor .translation-block:hover .block-actions,
+.research-editor .translation-block:focus-within .block-actions,
+.research-editor .translation-block.is-dirty .block-actions{
   opacity: 1;
 }
-
-.block-action {
+.research-editor .block-action{
   padding: 0.32rem 0.52rem;
   border: 1px solid var(--line);
   color: var(--muted);
@@ -1297,25 +1101,21 @@ progress::-moz-progress-bar {
   font-size: 0.66rem;
   font-weight: 700;
 }
-
-.block-action:hover,
-.block-action:focus-visible {
+.research-editor .block-action:hover,
+.research-editor .block-action:focus-visible{
   border-color: var(--ink);
   color: var(--ink);
 }
-
-.block-action.validate-action {
+.research-editor .block-action.validate-action{
   border-color: var(--success);
   color: var(--success);
 }
-
-.block-message {
+.research-editor .block-message{
   margin-left: auto;
   color: var(--success);
   font-size: 0.65rem;
 }
-
-mark.uncertainty-mark {
+.research-editor mark.uncertainty-mark{
   position: relative;
   padding: 0.05em 0.2em;
   border-bottom: 2px dotted #6d5316;
@@ -1323,8 +1123,7 @@ mark.uncertainty-mark {
   background: var(--amber-pale);
   cursor: pointer;
 }
-
-mark.uncertainty-mark::after {
+.research-editor mark.uncertainty-mark::after{
   position: relative;
   top: -0.45em;
   display: inline-grid;
@@ -1341,15 +1140,13 @@ mark.uncertainty-mark::after {
   font-weight: 900;
   line-height: 1;
 }
-
-mark.uncertainty-mark:hover,
-mark.uncertainty-mark:focus-visible {
+.research-editor mark.uncertainty-mark:hover,
+.research-editor mark.uncertainty-mark:focus-visible{
   outline: 2px solid var(--focus);
   outline-offset: 2px;
   background: var(--amber);
 }
-
-.uncertainty-fallback {
+.research-editor .uncertainty-fallback{
   display: inline-flex;
   gap: 0.4rem;
   align-items: center;
@@ -1363,8 +1160,7 @@ mark.uncertainty-mark:focus-visible {
   font-size: 0.68rem;
   font-weight: 700;
 }
-
-.uncertainty-fallback::before {
+.research-editor .uncertainty-fallback::before{
   display: grid;
   width: 15px;
   height: 15px;
@@ -1375,10 +1171,7 @@ mark.uncertainty-mark:focus-visible {
   content: "?";
   font-size: 0.62rem;
 }
-
-/* Dialog */
-
-.uncertainty-dialog {
+.research-editor .uncertainty-dialog{
   width: min(610px, calc(100vw - 2rem));
   max-height: calc(100vh - 2rem);
   padding: 0;
@@ -1388,64 +1181,54 @@ mark.uncertainty-mark:focus-visible {
   background: var(--surface);
   box-shadow: 0 28px 90px rgb(36 35 33 / 35%);
 }
-
-.uncertainty-dialog::backdrop {
+.research-editor .uncertainty-dialog::backdrop{
   background: rgb(36 35 33 / 52%);
 }
-
-.uncertainty-dialog form {
+.research-editor .uncertainty-dialog form{
   position: relative;
   padding: clamp(1.5rem, 5vw, 2.8rem);
 }
-
-.uncertainty-dialog h2 {
+.research-editor .uncertainty-dialog h2{
   margin: 0 2rem 1.5rem 0;
   font-family: Georgia, "Times New Roman", serif;
   font-size: 1.8rem;
   font-weight: 500;
 }
-
-.dialog-introduction {
+.research-editor .dialog-introduction{
   margin: -0.8rem 0 1.25rem;
   color: var(--muted);
   font-size: 0.78rem;
   line-height: 1.5;
 }
-
-.uncertainty-list-dialog {
+.research-editor .uncertainty-list-dialog{
   width: min(720px, calc(100vw - 2rem));
 }
-
-.uncertainty-group-list {
+.research-editor .uncertainty-group-list{
   display: grid;
   max-height: min(560px, calc(100vh - 13rem));
   border-top: 1px solid var(--line);
   overflow-y: auto;
 }
-
-.uncertainty-group-item {
+.research-editor .uncertainty-group-item{
   display: grid;
   gap: 0.42rem;
   padding: 1rem 0;
   border-bottom: 1px solid var(--line);
 }
-
-.uncertainty-group-heading {
+.research-editor .uncertainty-group-heading{
   display: flex;
   gap: 1rem;
   align-items: baseline;
   justify-content: space-between;
 }
-
-.uncertainty-group-heading h3 {
+.research-editor .uncertainty-group-heading h3{
   margin: 0;
   font-family: Georgia, "Times New Roman", serif;
   font-size: 1.12rem;
   font-weight: 600;
   overflow-wrap: anywhere;
 }
-
-.uncertainty-count {
+.research-editor .uncertainty-count{
   flex: none;
   padding: 0.2rem 0.42rem;
   color: #493a16;
@@ -1453,21 +1236,18 @@ mark.uncertainty-mark:focus-visible {
   font-size: 0.66rem;
   font-weight: 760;
 }
-
-.uncertainty-group-details,
-.uncertainty-group-reason {
+.research-editor .uncertainty-group-details,
+.research-editor .uncertainty-group-reason{
   margin: 0;
   color: var(--muted);
   font-size: 0.74rem;
   line-height: 1.45;
 }
-
-.uncertainty-group-open {
+.research-editor .uncertainty-group-open{
   width: fit-content;
   margin-top: 0.1rem;
 }
-
-.dialog-close {
+.research-editor .dialog-close{
   position: absolute;
   top: 0.8rem;
   right: 0.8rem;
@@ -1479,37 +1259,32 @@ mark.uncertainty-mark:focus-visible {
   cursor: pointer;
   font-size: 1.4rem;
 }
-
-.uncertainty-detail {
+.research-editor .uncertainty-detail{
   display: grid;
   margin: 0 0 1.4rem;
   border-top: 1px solid var(--line);
 }
-
-.uncertainty-detail div {
+.research-editor .uncertainty-detail div{
   display: grid;
   grid-template-columns: minmax(105px, 0.4fr) 1fr;
   gap: 1rem;
   padding: 0.7rem 0;
   border-bottom: 1px solid var(--line);
 }
-
-.uncertainty-detail dt {
+.research-editor .uncertainty-detail dt{
   color: var(--muted);
   font-size: 0.66rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
-
-.uncertainty-detail dd {
+.research-editor .uncertainty-detail dd{
   margin: 0;
   font-family: Georgia, "Times New Roman", serif;
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
-
-.fallback-instruction {
+.research-editor .fallback-instruction{
   margin: 0 0 1rem;
   padding: 0.75rem 0.85rem;
   border-left: 3px solid #6d5316;
@@ -1518,20 +1293,17 @@ mark.uncertainty-mark:focus-visible {
   font-size: 0.78rem;
   line-height: 1.5;
 }
-
-.dialog-actions {
+.research-editor .dialog-actions{
   display: flex;
   gap: 0.7rem;
   align-items: center;
   justify-content: end;
   margin-top: 1.5rem;
 }
-
-.dialog-actions .text-button {
+.research-editor .dialog-actions .text-button{
   margin-right: auto;
 }
-
-.sr-only {
+.research-editor .sr-only{
   position: absolute;
   width: 1px;
   height: 1px;
@@ -1541,164 +1313,129 @@ mark.uncertainty-mark:focus-visible {
   white-space: nowrap;
   border: 0;
 }
-
-@media (max-width: 800px) {
-  .workspace {
+@media  (max-width: 800px) {.research-editor .workspace{
     width: min(720px, calc(100% - 32px));
   }
-
-  .settings-card {
+.research-editor .settings-card{
     grid-template-columns: 1fr;
   }
-
-  .settings-section + .settings-section {
+.research-editor .settings-section + .settings-section{
     border-top: 1px solid var(--line);
     border-left: 0;
   }
-
-  .workspace:has(.review-panel:not([hidden])) {
+.research-editor .workspace:has(.review-panel:not([hidden])){
     width: calc(100% - 24px);
     height: auto;
   }
-
-  .review-panel {
+.research-editor .review-panel{
     height: auto;
   }
-
-  .review-grid {
+.research-editor .review-grid{
     height: auto;
     grid-template-columns: 1fr;
   }
-
-  .review-pane + .review-pane {
+.research-editor .review-pane + .review-pane{
     border-top: 1px solid var(--line);
     border-left: 0;
   }
-
-  .source-scroll {
+.research-editor .source-scroll{
     height: 30vh;
     min-height: 220px;
   }
-
-  .translation-scroll {
+.research-editor .translation-scroll{
     height: 50vh;
     min-height: 340px;
   }
 }
-
-@media (max-width: 600px) {
-  .app-header {
+@media  (max-width: 600px) {.research-editor .app-header{
     padding-inline: 16px;
   }
-
-  .local-label {
+.research-editor .local-label{
     display: none;
   }
-
-  .tab-bar {
+.research-editor .tab-bar{
     padding-inline: 6px;
   }
-
-  .tab-button {
+.research-editor .tab-button{
     padding-inline: 0.75rem;
   }
-
-  .panel-header,
-  .review-toolbar,
-  .form-footer {
+.research-editor .panel-header,
+.research-editor .review-toolbar,
+.research-editor .form-footer{
     align-items: stretch;
     flex-direction: column;
   }
-
-  .panel-header {
+.research-editor .panel-header{
     gap: 1rem;
   }
-
-  .language-grid {
+.research-editor .language-grid{
     grid-template-columns: 1fr;
   }
-
-  .job-settings-grid {
+.research-editor .job-settings-grid{
     grid-template-columns: 1fr;
   }
-
-  .language-arrow {
+.research-editor .language-arrow{
     height: 20px;
     transform: rotate(90deg);
   }
-
-  .form-footer {
+.research-editor .form-footer{
     margin: 2rem -1.5rem -1.5rem;
     padding: 1.25rem 1.5rem;
   }
-
-  .submit-actions,
-  .primary-button {
+.research-editor .submit-actions,
+.research-editor .primary-button{
     width: 100%;
   }
-
-  .submit-error {
+.research-editor .submit-error{
     max-width: none;
     text-align: left;
   }
-
-  .review-actions {
+.research-editor .review-actions{
     justify-content: space-between;
   }
-
-  .review-list-card {
+.research-editor .review-list-card{
     grid-template-columns: 1fr;
   }
-
-  .review-list-actions {
+.research-editor .review-list-actions{
     justify-content: flex-start;
   }
-
-  .review-key {
+.research-editor .review-key{
     flex-wrap: wrap;
     padding-block: 0.45rem;
   }
-
-  .review-key span:last-child {
+.research-editor .review-key span:last-child{
     width: 100%;
     margin-left: 0;
   }
-
-  .pane-heading {
+.research-editor .pane-heading{
     padding-inline: 0.9rem;
   }
-
-  .dialog-actions {
+.research-editor .dialog-actions{
     align-items: stretch;
     flex-direction: column-reverse;
   }
-
-  .dialog-actions .text-button {
+.research-editor .dialog-actions .text-button{
     align-self: center;
     margin: 0.4rem 0 0;
   }
 }
-
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
+@media  (prefers-reduced-motion: reduce) {.research-editor *,
+.research-editor *::before,
+.research-editor *::after{
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
   }
 }
-
-.glossary-toolbar {
+.research-editor .glossary-toolbar{
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
   margin-bottom: 1rem;
 }
-.glossary-toolbar .settings-actions,
-.glossary-toolbar .settings-message {
+.research-editor .glossary-toolbar .settings-actions,
+.research-editor .glossary-toolbar .settings-message{
   grid-column: 1 / -1;
 }
-.glossary-job-choice { margin: 1rem 0; }
-@media (max-width: 640px) {
-  .glossary-toolbar { grid-template-columns: 1fr; }
+.research-editor .glossary-job-choice{ margin: 1rem 0; }
+@media  (max-width: 640px) {.research-editor .glossary-toolbar{ grid-template-columns: 1fr; }
 }

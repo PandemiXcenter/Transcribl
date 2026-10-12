@@ -25,8 +25,9 @@ from transcribl.ports.translation import PageTranslationRequest, TableReconstruc
 
 @pytest.mark.parametrize("provider", ["openai", "anthropic"])
 @pytest.mark.parametrize("table", [False, True])
+@pytest.mark.parametrize("thinking", ["default", "high", "max"])
 def test_real_sdk_serializes_page_and_table_contracts_offline(
-    tmp_path: Path, provider: str, table: bool
+    tmp_path: Path, provider: str, table: bool, thinking: str
 ) -> None:
     payload = (
         GeneratedTablePayload.model_validate(
@@ -94,13 +95,13 @@ def test_real_sdk_serializes_page_and_table_contracts_offline(
     if provider == "openai":
         adapter = OpenAIPageTranslator(
             api_key="unused",
-            config=config.provider.openai,
+            config=config.provider.openai.model_copy(update={"thinking_level": thinking}),
             client=openai.OpenAI(api_key="test-key", http_client=http),
         )
     else:
         adapter = AnthropicPageTranslator(
             api_key="unused",
-            config=config.provider.anthropic,
+            config=config.provider.anthropic.model_copy(update={"thinking_level": thinking}),
             client=anthropic.Anthropic(api_key="test-key", http_client=http),
         )
     image = tmp_path / "page.png"
@@ -138,6 +139,16 @@ def test_real_sdk_serializes_page_and_table_contracts_offline(
         assert content[0]["source"]["data"] == encoded
         schema = body["output_config"]["format"]["schema"]
     assert ("tables" if table else "blocks") in schema["properties"]
+    if thinking == "default":
+        assert "reasoning" not in body and "thinking" not in body
+        assert "thinking_level" not in adapter.descriptor.semantic_configuration
+    elif provider == "openai":
+        assert body["reasoning"] == {"effort": thinking}
+    else:
+        assert body["thinking"] == {"type": "adaptive"}
+        assert body["output_config"]["effort"] == thinking
+    if thinking != "default":
+        assert adapter.descriptor.semantic_configuration["thinking_level"] == thinking
     assert http.is_closed
 
 

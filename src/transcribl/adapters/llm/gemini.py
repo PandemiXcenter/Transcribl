@@ -41,6 +41,7 @@ class GeminiPageTranslator:
         timeout_seconds: int,
         attempts: int,
         max_inline_request_bytes: int,
+        thinking_level: str = "default",
         client: Any | None = None,
     ) -> None:
         self._model = model
@@ -48,6 +49,7 @@ class GeminiPageTranslator:
         self._timeout_seconds = timeout_seconds
         self._attempts = attempts
         self._max_inline_request_bytes = max_inline_request_bytes
+        self._thinking_level = thinking_level
         self._client = client or genai.Client(
             api_key=api_key,
             http_options=types.HttpOptions(
@@ -59,16 +61,19 @@ class GeminiPageTranslator:
 
     @property
     def descriptor(self) -> ProviderDescriptor:
+        semantics = {"api_version": self._api_version}
+        if self._thinking_level != "default":
+            semantics["thinking_level"] = self._thinking_level
         return ProviderDescriptor(
             provider="gemini",
             model=self._model,
             configuration={
-                "api_version": self._api_version,
+                **semantics,
                 "request_timeout_seconds": self._timeout_seconds,
                 "request_attempts": self._attempts,
                 "max_inline_request_bytes": self._max_inline_request_bytes,
             },
-            semantic_configuration={"api_version": self._api_version},
+            semantic_configuration=semantics,
         )
 
     def translate_page(self, request: PageTranslationRequest) -> ProviderResult:
@@ -123,6 +128,13 @@ class GeminiPageTranslator:
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json",
                     response_json_schema=payload_model.model_json_schema(),
+                    thinking_config=(
+                        types.ThinkingConfig(
+                            thinking_level=types.ThinkingLevel(self._thinking_level.upper())
+                        )
+                        if self._thinking_level != "default"
+                        else None
+                    ),
                 ),
             )
         except errors.APIError as exc:

@@ -12,6 +12,12 @@ from transcribl.domain.models import (
     NonEmptyText,
     TranslationSettings,
 )
+from transcribl.domain.preferences import (
+    StyleName,
+    StylePrompt,
+    ThinkingLevel,
+    WorkbenchPreferences,
+)
 
 ProviderName = Literal["gemini", "openai", "anthropic"]
 
@@ -65,6 +71,8 @@ class ModelProviderConfig(ConfigModel):
     request_timeout_seconds: int = Field(ge=1, le=900)
     request_attempts: int = Field(ge=1, le=10)
     max_inline_request_bytes: int = Field(ge=1_000_000, le=20_000_000)
+    thinking_level: ThinkingLevel
+    thinking_level_choices: list[ThinkingLevel] = Field(min_length=1)
 
     @model_validator(mode="after")
     def default_model_must_be_selectable(self) -> Self:
@@ -72,6 +80,10 @@ class ModelProviderConfig(ConfigModel):
             raise ValueError("selectable_models must be unique")
         if self.model not in self.selectable_models:
             raise ValueError("default model must appear in selectable_models")
+        if self.thinking_level not in self.thinking_level_choices:
+            raise ValueError("thinking_level must appear in thinking_level_choices")
+        if len(self.thinking_level_choices) != len(set(self.thinking_level_choices)):
+            raise ValueError("thinking_level_choices must be unique")
         return self
 
 
@@ -111,6 +123,19 @@ class ProviderConfig(ConfigModel):
         ]
         if len(models) != len(set(models)):
             raise ValueError("selectable model IDs must be unique across providers")
+        return self
+
+
+class DesktopConfig(ConfigModel):
+    window_width: int = Field(ge=800, le=7680)
+    window_height: int = Field(ge=600, le=4320)
+    minimum_width: int = Field(ge=640, le=7680)
+    minimum_height: int = Field(ge=480, le=4320)
+
+    @model_validator(mode="after")
+    def minimum_fits_window(self) -> Self:
+        if self.minimum_width > self.window_width or self.minimum_height > self.window_height:
+            raise ValueError("Desktop minimum dimensions must fit the initial window")
         return self
 
 
@@ -194,6 +219,13 @@ class PdfExportConfig(ConfigModel):
     compile_timeout_seconds: int = Field(ge=1, le=300)
 
 
+class WorkbenchConfig(ConfigModel):
+    default_glossary: NonEmptyText
+    max_styles: int = Field(ge=3, le=50)
+    max_style_prompt_characters: int = Field(ge=1, le=4000)
+    style_prompts: dict[StyleName, StylePrompt] = Field(min_length=3, max_length=50)
+
+
 class ProjectConfig(ConfigModel):
     """Fully resolved, non-secret application configuration."""
 
@@ -204,7 +236,9 @@ class ProjectConfig(ConfigModel):
     translation: ConfiguredTranslationSettings
     export: ConfiguredMarkdownExportSettings
     pdf_export: PdfExportConfig
+    desktop: DesktopConfig
     web: WebConfig
+    workbench: WorkbenchConfig
 
     @model_validator(mode="after")
     def default_uncertainty_level_must_be_selectable(self) -> Self:
@@ -217,7 +251,85 @@ class ProjectConfig(ConfigModel):
             raise ValueError(
                 "the configured uncertainty default must appear in uncertainty_level_choices"
             )
+        workbench_defaults(self)
         return self
+
+
+def workbench_defaults(config: ProjectConfig) -> WorkbenchPreferences:
+    return WorkbenchPreferences(
+        default_model=config.provider.selected.model,
+        default_style=config.translation.style_name or config.translation.style.value,
+        default_glossary=config.workbench.default_glossary,
+        style_prompts=config.workbench.style_prompts,
+        thinking_levels={
+            name: config.provider.settings_for(name).thinking_level
+            for name in ("gemini", "openai", "anthropic")
+        },
+        previous_page_context_count=config.translation.previous_page_context_count,
+        image_dpi=config.extraction.image_dpi,
+        uncertainty_level=(
+            config.translation.uncertainty_level.value
+            if config.translation.mark_uncertain_terms
+            else "off"
+        ),
+        auto_continue=config.web.auto_continue_default,
+    )
+
+
+def resolve_workbench_preferences(
+    config: ProjectConfig, preferences: WorkbenchPreferences
+) -> ProjectConfig:
+    """Resolve validated saved defaults into an isolated per-job configuration."""
+    name = config.provider.provider_for_model(preferences.default_model)
+    provider = config.provider.model_copy(deep=True)
+    provider.name = name
+    provider.settings_for(name).model = preferences.default_model
+    for company in ("gemini", "openai", "anthropic"):
+        settings = provider.settings_for(company)
+        level = preferences.thinking_levels[company]
+        if level not in settings.thinking_level_choices:
+            raise ValueError(f"Unsupported thinking level for {company}")
+        settings.thinking_level = level
+    if preferences.uncertainty_level not in config.web.uncertainty_level_choices:
+        raise ValueError("Select a configured uncertainty level")
+    if any(
+        len(p) > config.workbench.max_style_prompt_characters
+        for p in preferences.style_prompts.values()
+    ):
+        raise ValueError("Style instructions exceed the configured character limit")
+    if len(preferences.style_prompts) > config.workbench.max_styles:
+        raise ValueError("Too many styles")
+    style = preferences.default_style
+    translation = config.translation.model_copy(
+        update={
+            "style": TranslationStyle(style)
+            if style in {s.value for s in TranslationStyle}
+            else TranslationStyle.CUSTOM,
+            "style_name": style,
+            "style_prompt": preferences.style_prompts[style],
+            "previous_page_context_count": preferences.previous_page_context_count,
+            "mark_uncertain_terms": preferences.uncertainty_level != "off",
+            "uncertainty_level": UncertaintyLevel(preferences.uncertainty_level)
+            if preferences.uncertainty_level != "off"
+            else config.translation.uncertainty_level,
+        }
+    )
+    return config.model_copy(
+        update={
+            "provider": provider,
+            "translation": translation,
+            "extraction": config.extraction.model_copy(update={"image_dpi": preferences.image_dpi}),
+            "web": config.web.model_copy(
+                update={"auto_continue_default": preferences.auto_continue}
+            ),
+            "workbench": config.workbench.model_copy(
+                update={
+                    "default_glossary": preferences.default_glossary,
+                    "style_prompts": preferences.style_prompts,
+                }
+            ),
+        }
+    )
 
 
 def load_project_config(path: Path) -> ProjectConfig:
@@ -233,7 +345,7 @@ def load_project_config(path: Path) -> ProjectConfig:
             config = config.model_copy(
                 update={"paths": config.paths.model_copy(update={"artifacts_dir": artifacts_dir})}
             )
-        return config
+        return resolve_workbench_preferences(config, workbench_defaults(config))
     except TOMLDecodeError as exc:
         raise ConfigurationError(f"Invalid TOML in {path}: {exc}") from exc
     except ValidationError as exc:

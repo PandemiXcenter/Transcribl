@@ -1,121 +1,64 @@
-# Native executable packaging
+# Desktop packaging
 
-Transcribl uses PyInstaller to build one native executable containing the
-Python runtime, application modules, local web assets, prompt resources,
-MarkItDown, Magika data, and PDFium binaries. PyInstaller is managed in the uv
-development dependency group; do not install or invoke it outside uv.
+Distribution builds run only in GitHub Actions. Open **Actions → Desktop builds →
+Run workflow**, or push a change/PR to trigger `.github/workflows/desktop-build.yml`.
+The former local `compile` build entry point is removed. `transcribl compile`
+still compiles canonical translation data into document projections.
 
-## Build commands
+| Target | Native runner | Download | Launch |
+| --- | --- | --- | --- |
+| macOS ARM64 | `macos-15` | `Transcribl-macos-arm64.zip` | `Transcribl.app` |
+| Windows x64 | `windows-2025` | `Transcribl-windows-x64.zip` | `Transcribl/Transcribl.exe` |
 
-Run exactly one command on the matching operating system:
+Extract the entire download. Windows needs the adjacent runtime files, not just
+the EXE. The Windows executable remains console-capable to retain CLI use. On
+macOS, invoke `Transcribl.app/Contents/MacOS/Transcribl --help` for CLI commands.
+No arguments open the NiceGUI native desktop window.
 
-```bash
-uv run compile --windows
-uv run compile --mac
-uv run compile --linux
-```
+The workflow uses locked uv environments, runs formatting, lint, type, unit,
+integration and fake-provider tests, and builds with the Actions-owned
+`.github/packaging/transcribl.spec`. That spec checks `GITHUB_ACTIONS` and the
+native CPU/OS before calling PyInstaller; there is no cross-compilation or Linux
+build. GitHub retains successful ZIP artifacts for 14 days. It does not publish
+releases automatically.
 
-For a distributable rebuild, add `--clean`:
+The resource allowlist includes application package data, NiceGUI's local JS/CSS,
+pywebview, prompts, the checked-in default TOML, MarkItDown/Magika and PDFium.
+It does not collect a checkout directory wholesale. `.env`, `.provider-keys`,
+personal TOML, PDFs, canonical runs, and review data are never build inputs.
+`multiprocessing.freeze_support()` executes before GUI imports in the frozen
+entrypoint. This is necessary for NiceGUI's native window subprocess.
 
-```bash
-uv run compile --mac --clean
-```
+The packages are currently unsigned and not notarized. Windows requires the
+Microsoft Edge WebView2 Runtime; macOS uses its system WebKit. Reviewed PDF export
+requires an external XeLaTeX installation visible to the configured
+`pdf_export.latex_engine`. Other export formats require no TeX installation.
 
-Clean mode deletes only `build/pyinstaller/<platform>/` and
-`dist/<platform>/`, asks PyInstaller to discard its analysis cache, and bundles
-the checked-in `config/default.toml`. It never bundles or deletes the developer's
-`.env`, `config/personal.local.toml`, artifacts, source PDFs, or saved review data.
-Non-clean builds use the same private-data exclusion; the flag additionally
-guarantees a cache-free target rebuild.
+## Persistent runtime paths
 
-PyInstaller is a native packager, not a cross-compiler. A Windows executable must
-be built on Windows, a macOS executable on macOS, and a Linux executable on Linux.
-The command rejects a mismatched target instead of producing a misleading
-artifact. Linux builds should use the oldest glibc-based distribution that the
-team intends to support. macOS builds use the architecture of the uv-managed
-Python interpreter; build separately when both Apple Silicon and Intel binaries
-are required.
+| Platform | Data root |
+| --- | --- |
+| macOS | `~/Library/Application Support/Transcribl` |
+| Windows | `%LOCALAPPDATA%/Transcribl` |
 
-The output is:
+The app refreshes `config/default.toml` from bundled defaults atomically, preserves
+`config/personal.local.toml`, and retains existing `artifacts/`, glossary catalog,
+`.env` and `.provider-keys`. Personal TOML must add the new `[desktop]` section;
+strict validation does not invent missing settings. Upgrading the app does not
+rewrite PDFs, canonical runs or editorial revisions.
 
-```text
-dist/windows/Transcribl.exe
-dist/mac/Transcribl
-dist/linux/Transcribl
-```
+## Verification boundary
 
-`build/pyinstaller/<platform>/` contains disposable intermediate analysis and
-specification files. Both `build/` and `dist/` are ignored by Git.
+Each workflow tests the built executable's CLI, synthetic PDF extraction (including
+bundled render/extraction dependencies), NiceGUI HTML page and safe configuration
+API. The smoke test uses temporary config/data and strips provider keys from the
+child process. No provider call is made.
 
-## Executable behavior
+A passing CI smoke test does not establish live provider behavior, native window
+rendering/download dialogs, code signing, or recipient-machine compatibility.
+Those need validation on the two actual desktop targets. Source development uses
+`uv run app` for native mode or `uv run transcribl serve` for browser mode; neither
+command builds a distribution.
 
-Running the executable without arguments starts the same loopback FastAPI
-workbench as `uv run app`:
-
-```bash
-./dist/mac/Transcribl
-```
-
-After the server is ready, the launcher opens the configured loopback URL in the
-operating system's default browser. Set `web.open_browser_on_start = false` in a
-personal TOML file to suppress this behavior. A missing or unavailable desktop
-browser does not stop the server; its URL can still be opened manually.
-
-Passing arguments exposes the complete existing CLI through the same file:
-
-```bash
-./dist/mac/Transcribl --help
-./dist/mac/Transcribl run /path/to/article.pdf
-./dist/mac/Transcribl serve
-```
-
-The bundled `config/default.toml` is refreshed into an app-owned per-user data
-directory on launch. A colleague may copy it to `config/personal.local.toml` in
-that directory for durable overrides; the application never overwrites the
-personal file. Artifacts and the narrow `.env` containing only `GEMINI_API_KEY`
-remain in the same persistent application-data root:
-
-- Windows: `%LOCALAPPDATA%\Transcribl`
-- macOS: `~/Library/Application Support/Transcribl`
-- Linux: `${XDG_DATA_HOME:-~/.local/share}/transcribl`
-
-When upgrading from a differently named executable, close both versions and copy
-your existing `config/personal.local.toml`, `.env`, and artifact directory into
-the corresponding Transcribl application-data root. Update any absolute paths
-in your personal TOML. The renamed executable uses the new directory; it does
-not move or delete data from the previous location. Repository launches continue
-to use the local configuration and artifact paths, including after renaming the
-checkout folder.
-
-The one-file executable extracts its bundled runtime into a temporary directory
-while running, as PyInstaller one-file applications normally do. Canonical jobs,
-settings, and secrets never use that temporary directory.
-
-Clean build mode affects only the developer's generated build directories. It
-does not make the resulting application stateless: each recipient can still save
-their key, personal TOML, translation jobs, and editorial metadata in their own
-application-data directory.
-
-## External requirements and verification
-
-The executable does not bundle a TeX distribution. Reviewed Markdown, text, and
-LaTeX source work without TeX; reviewed PDF export still requires the configured
-`xelatex` executable on the workstation. This keeps the application artifact
-bounded and preserves the existing constrained XeLaTeX adapter.
-
-After each native build, verify at minimum:
-
-1. `Transcribl --help` starts without an import error.
-2. Running without arguments serves `GET /` and `/api/config` on the configured
-   loopback address.
-3. A small synthetic PDF can be prepared without contacting Gemini.
-4. The Settings API-key path writes only to the native application-data root.
-5. Live Gemini translation is tested only with explicit opt-in and a real key.
-
-Unsigned executables may trigger operating-system trust warnings when shared.
-Signing and notarization are release/distribution concerns and are intentionally
-separate from this reproducible local build command.
-
-OpenAI and Anthropic SDKs are runtime dependencies. Their saved keys live in the
-ignored `.provider-keys` cache beside the runtime `.env`, including in the native
-per-user application-data directory. Neither credential file is bundled.
+Framework and runner references: [NiceGUI native packaging](https://nicegui.io/documentation/section_configuration_deployment),
+[GitHub runner architectures](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).

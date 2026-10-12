@@ -1,0 +1,210 @@
+<div id="global-alert" class="field-error" role="alert" hidden><span id="global-alert-message"></span><button id="dismiss-alert" type="button">Dismiss</button></div>      <section
+        id="review-panel"
+        class="tab-panel review-panel"
+        
+        
+        data-testid="review-view"
+      >
+        <div id="review-library" class="review-library">
+          <header class="panel-header">
+            <div>
+              <h1>Articles</h1>
+              
+            </div>
+            <button
+              id="refresh-translations"
+              class="secondary-button compact-control"
+              type="button"
+            >Refresh</button>
+          </header>
+          <div id="review-list" class="review-list" role="list"></div>
+          <p id="review-list-empty" class="empty-message">
+            No translated articles were found.
+          </p>
+        </div>
+
+        <div id="review-editor" class="review-editor" hidden>
+          <header class="review-toolbar">
+            <div>
+              <h1 id="review-heading">Article</h1>
+              <p class="review-document" id="review-document"></p>
+            </div>
+            <div class="review-actions">
+              <span id="review-progress" class="review-progress"></span>
+              <button
+                id="uncertainty-list-button"
+                class="secondary-button compact-control"
+                data-testid="uncertainty-list-button"
+                type="button"
+                aria-haspopup="dialog"
+                aria-controls="uncertainty-list-dialog"
+                disabled
+              >Uncertain terms (0)</button>
+              <button
+                id="back-to-translations"
+                class="secondary-button compact-control"
+                type="button"
+              >All articles</button>
+              <button
+                id="new-translation"
+                class="secondary-button compact-control"
+                type="button"
+              >New translation</button>
+              <details class="export-menu toolbar-export-menu">
+                <summary class="secondary-button compact-control">Export</summary>
+                <div class="export-menu-options" aria-label="Export article">
+                  <a id="export-pdf-link" href="#" download>LaTeX PDF (.pdf)</a>
+                  <a id="export-latex-link" href="#" download>LaTeX source (.tex)</a>
+                  <a id="export-markdown-link" href="#" download>Markdown (.md)</a>
+                  <a id="export-text-link" href="#" download>Plain text (.txt)</a>
+                </div>
+              </details>
+            </div>
+          </header>
+
+          <div class="review-key" aria-label="Review legend">
+            <span><i class="legend-source" aria-hidden="true"></i> Page image</span>
+            <span><i class="legend-edited" aria-hidden="true"></i> Manual edit</span>
+            <span><i class="legend-uncertain" aria-hidden="true">?</i> Needs attention</span>
+            <span id="active-page-label">Physical page 1</span>
+          </div>
+
+          <div class="review-grid">
+            <section class="review-pane source-pane" aria-labelledby="source-heading">
+              <header class="pane-heading">
+                <h2 id="source-heading">Original page</h2>
+                <div class="source-pane-controls">
+                  <label for="review-zoom-select">
+                    Zoom
+                    <select
+                      id="review-zoom-select"
+                      class="compact-select"
+                      data-testid="review-zoom-select"
+                      aria-label="Original page zoom"
+                    ></select>
+                  </label>
+                  <a id="full-size-page-link" href="#" target="_blank" rel="noopener">
+                    Open full size
+                  </a>
+                </div>
+              </header>
+              <div
+                id="source-scroll"
+                class="document-scroll source-scroll"
+                aria-label="Original page image, synchronized with the translation"
+                aria-readonly="true"
+              >
+                <div id="source-content" class="document-content source-image-content">
+                  <p id="source-page-label" class="page-label">Physical page 1</p>
+                  <img
+                    id="source-page-image"
+                    class="source-page-image"
+                    alt="Original physical page 1"
+                  >
+                </div>
+              </div>
+            </section>
+
+            <section class="review-pane translation-pane" aria-labelledby="translation-heading">
+              <header class="pane-heading">
+                <h2 id="translation-heading">Translated text</h2>
+                <span>Scroll and edit here</span>
+              </header>
+              <div
+                id="translation-scroll"
+                class="document-scroll translation-scroll"
+                data-testid="translation-scroll"
+                tabindex="0"
+                aria-label="Editable translated text"
+              >
+                <div id="translation-content" class="document-content"></div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </section>
+    <dialog
+      id="uncertainty-list-dialog"
+      class="uncertainty-dialog uncertainty-list-dialog"
+      aria-labelledby="uncertainty-list-title"
+    >
+      <form method="dialog">
+        <button
+          class="dialog-close"
+          type="submit"
+          aria-label="Close uncertain terms list"
+        >×</button>
+        <h2 id="uncertainty-list-title">Uncertain terms</h2>
+        <p class="dialog-introduction">
+          Unresolved terms are ordered by number of marked occurrences.
+        </p>
+        <div id="uncertainty-group-list" class="uncertainty-group-list" role="list"></div>
+        <p id="uncertainty-group-empty" class="empty-message">
+          No unresolved uncertain terms remain.
+        </p>
+      </form>
+    </dialog>
+
+    <dialog id="uncertainty-dialog" class="uncertainty-dialog" aria-labelledby="uncertainty-title">
+      <form id="uncertainty-form" method="dialog">
+        <button
+          id="close-uncertainty"
+          class="dialog-close"
+          type="button"
+          aria-label="Close uncertainty review"
+        >×</button>
+        <h2 id="uncertainty-title">Review uncertain translation</h2>
+
+        <dl class="uncertainty-detail">
+          <div>
+            <dt>Original term</dt>
+            <dd id="uncertainty-source"></dd>
+          </div>
+          <div>
+            <dt>Model suggestion</dt>
+            <dd id="uncertainty-proposed"></dd>
+          </div>
+          <div>
+            <dt>Reason</dt>
+            <dd id="uncertainty-reason"></dd>
+          </div>
+          <div id="alternatives-row">
+            <dt>Alternatives</dt>
+            <dd id="uncertainty-alternatives"></dd>
+          </div>
+        </dl>
+
+        <p id="fallback-instruction" class="fallback-instruction" hidden>
+          This uncertainty could not be aligned to an exact range. Edit the
+          translated block manually, then save or validate it.
+        </p>
+        <label id="replacement-field" class="field-label" for="replacement-input">
+          Correct translation
+          <input
+            id="replacement-input"
+            data-testid="uncertainty-replacement"
+            type="text"
+            autocomplete="off"
+            required
+          >
+        </label>
+        <p id="replacement-error" class="field-error" hidden></p>
+
+        <div class="dialog-actions">
+          <button id="cancel-uncertainty" class="text-button" type="button">Cancel</button>
+          <button
+            id="translate-one"
+            class="secondary-button compact-control"
+            data-testid="translate-one"
+            type="button"
+          >Translate One</button>
+          <button
+            id="translate-all"
+            class="primary-button compact-control"
+            data-testid="translate-all"
+            type="button"
+            hidden
+          >Translate All</button>
+        </div>
+      </form>
+    </dialog>
