@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 
 def workbench_defaults(config: ProjectConfig) -> WorkbenchPreferences:
     return WorkbenchPreferences(
+        currency=config.costs.default_currency,
         default_model=config.provider.selected.model,
         default_style=config.translation.style_name or config.translation.style.value,
         default_glossary=config.workbench.default_glossary,
@@ -36,6 +37,8 @@ def resolve_workbench_preferences(
     config: ProjectConfig, preferences: WorkbenchPreferences
 ) -> ProjectConfig:
     """Resolve validated saved defaults into an isolated per-job configuration."""
+    if preferences.currency not in config.costs.currency_choices:
+        raise ValueError("Select a configured currency")
     name = config.provider.provider_for_model(preferences.default_model)
     provider = config.provider.model_copy(deep=True)
     provider.name = name
@@ -72,6 +75,7 @@ def resolve_workbench_preferences(
     )
     return config.model_copy(
         update={
+            "costs": config.costs.model_copy(update={"default_currency": preferences.currency}),
             "provider": provider,
             "translation": translation,
             "extraction": config.extraction.model_copy(update={"image_dpi": preferences.image_dpi}),

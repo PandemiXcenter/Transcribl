@@ -4,6 +4,8 @@ from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from transcribl.domain.currency import Currency
+
 ThinkingLevel = Literal["default", "minimal", "low", "medium", "high", "xhigh", "max"]
 StyleName = Annotated[str, Field(min_length=1, max_length=100, pattern=r"^\S(?:.*\S)?$")]
 StylePrompt = Annotated[str, Field(min_length=1, max_length=4000)]
@@ -12,6 +14,7 @@ StylePrompt = Annotated[str, Field(min_length=1, max_length=4000)]
 class WorkbenchPreferences(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    currency: Currency
     default_model: str = Field(min_length=1, max_length=200)
     default_style: StyleName
     default_glossary: str = Field(min_length=1, max_length=100)

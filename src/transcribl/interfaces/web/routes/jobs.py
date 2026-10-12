@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import asdict
 from typing import Annotated
 
 from fastapi import (
@@ -18,6 +17,8 @@ from transcribl.application.jobs.records import JobNotFoundError
 from transcribl.domain.errors import (
     ArtifactError,
 )
+from transcribl.domain.languages import same_language
+from transcribl.interfaces.web.cost_payloads import job_payload
 from transcribl.interfaces.web.credentials import parse_session_api_key
 from transcribl.interfaces.web.job_settings import parse_glossary, parse_job_settings
 from transcribl.interfaces.web.schemas import (
@@ -37,11 +38,18 @@ def create_router(services: WebServices) -> APIRouter:
 
     @router.get("/api/jobs")
     def list_review_jobs() -> dict[str, object]:
-        return {"jobs": [asdict(snapshot) for snapshot in manager.list_reviews()]}
+        return {
+            "jobs": [job_payload(snapshot, settings_service) for snapshot in manager.list_reviews()]
+        }
 
     @router.get("/api/jobs/recoverable")
     def list_recoverable_jobs() -> dict[str, object]:
-        return {"jobs": [asdict(snapshot) for snapshot in manager.list_recoverable_jobs()]}
+        return {
+            "jobs": [
+                job_payload(snapshot, settings_service)
+                for snapshot in manager.list_recoverable_jobs()
+            ]
+        }
 
     @router.delete("/api/jobs/{job_id}", status_code=204)
     def delete_review_job(
@@ -93,8 +101,28 @@ def create_router(services: WebServices) -> APIRouter:
                         status_code=422,
                         detail="Default glossary was deleted; choose another in Settings",
                     )
-                glossary_id, glossary_revision = selected.glossary_id, selected.revision
+                if same_language(
+                    selected.source_language, runtime_config.translation.source_language
+                ):
+                    glossary_id, glossary_revision = selected.glossary_id, selected.revision
+                else:
+                    glossary_id = "none"
+        configured_matches = same_language(
+            config.translation.source_language, runtime_config.translation.source_language
+        )
+        if not configured_matches:
+            runtime_config = runtime_config.model_copy(
+                update={
+                    "translation": runtime_config.translation.model_copy(update={"glossary": {}})
+                }
+            )
+        if glossary_id is None and not resolved_glossary and not configured_matches:
+            glossary_id = "none"
         if glossary_id == "configured":
+            if not configured_matches:
+                raise HTTPException(
+                    status_code=422, detail="Configured glossary does not match the source language"
+                )
             if glossary_revision is not None or resolved_glossary:
                 raise HTTPException(
                     status_code=422,
@@ -118,7 +146,9 @@ def create_router(services: WebServices) -> APIRouter:
                         status_code=422, detail="Select a current glossary revision"
                     )
                 resolved_glossary = glossary_service.resolve(
-                    glossary_id, expected_revision=glossary_revision
+                    glossary_id,
+                    expected_revision=glossary_revision,
+                    source_language=runtime_config.translation.source_language,
                 )
             # A named glossary (or None) replaces the configured glossary in full.
             runtime_config = runtime_config.model_copy(
@@ -146,12 +176,12 @@ def create_router(services: WebServices) -> APIRouter:
         except Exception:
             remove_upload_directory(upload_path, config.paths.artifacts_dir)
             raise
-        return JSONResponse(asdict(snapshot), status_code=202)
+        return JSONResponse(job_payload(snapshot, settings_service), status_code=202)
 
     @router.get("/api/jobs/{job_id}")
     def job_status(job_id: str) -> dict[str, object]:
         try:
-            return asdict(manager.get(job_id))
+            return job_payload(manager.get(job_id), settings_service)
         except JobNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -167,7 +197,7 @@ def create_router(services: WebServices) -> APIRouter:
             snapshot = manager.continue_job(job_id, api_key=command.api_key)
         except JobNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
-        return JSONResponse(asdict(snapshot), status_code=202)
+        return JSONResponse(job_payload(snapshot, settings_service), status_code=202)
 
     @router.post("/api/jobs/{job_id}/cancel")
     def cancel_job(
@@ -177,7 +207,7 @@ def create_router(services: WebServices) -> APIRouter:
     ) -> dict[str, object]:
         require_csrf(at_csrf, x_csrf_token)
         try:
-            return asdict(manager.cancel_job(job_id))
+            return job_payload(manager.cancel_job(job_id), settings_service)
         except JobNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 

@@ -60,6 +60,8 @@ class Workbench:
                         self.settings.settings_controls()
                     else:
                         ui.html(asset("editor.html"), sanitize=False).classes("research-editor")
+        self.translation.source.select.on_value_change(self.glossaries.render_glossary_choices)
+        self.translation.source.custom.on_value_change(self.glossaries.render_glossary_choices)
         self.tabs.set_value("Translate")
         ui.on("transcribl-tab", lambda event: self.tabs.set_value(event.args))
         self.timer = ui.timer(config.web.status_poll_interval_ms / 1000, self.translation.poll_job)
@@ -70,7 +72,7 @@ class Workbench:
             section.set_visibility(name == event.value)
         if event.value == "Articles" and self.editor_ready:
             ui.run_javascript(
-                'window.transcriblEditor.refresh(); window.dispatchEvent(new Event("resize"));'
+                'window.transcriblEditor.refreshCosts(); window.dispatchEvent(new Event("resize"));'
             )
 
     async def initialize(self) -> None:

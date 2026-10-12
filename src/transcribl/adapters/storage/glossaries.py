@@ -1,5 +1,6 @@
 """Atomic, process-locked local glossary catalog; no translation artifacts are changed."""
 
+import json
 from pathlib import Path
 from threading import RLock
 
@@ -71,7 +72,10 @@ class FilesystemGlossaryRepository:
         try:
             if not self._path.exists():
                 return GlossaryLibrary()
-            return GlossaryLibrary.model_validate_json(self._path.read_text(encoding="utf-8"))
+            payload = json.loads(self._path.read_text(encoding="utf-8"))
+            if isinstance(payload, dict) and payload.get("schema_version") == "1.0":
+                payload = {**payload, "schema_version": "2.0"}
+            return GlossaryLibrary.model_validate(payload)
         except (OSError, ValueError):
             raise GlossaryStorageError(
                 "The local glossary library is unavailable or invalid"

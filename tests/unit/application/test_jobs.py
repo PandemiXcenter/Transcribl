@@ -427,11 +427,14 @@ def test_web_jobs_run_in_order_and_preserve_distinct_glossary_runs(
         max_name_characters=100,
     )
     historical = glossaries.save(
+        source_language="Danish",
         name="Historical",
         entries=[GlossaryEntry(source_term="Vattersot", target_translation="Dropsy")],
     )
     modern = glossaries.save(
-        name="Modern", entries=[GlossaryEntry(source_term="Vattersot", target_translation="Edema")]
+        source_language="Danish",
+        name="Modern",
+        entries=[GlossaryEntry(source_term="Vattersot", target_translation="Edema")],
     )
     translator = RecordingTranslator()
 
@@ -459,12 +462,16 @@ def test_web_jobs_run_in_order_and_preserve_distinct_glossary_runs(
     first = manager.submit(
         upload_path=_stage_pdf(config.paths.artifacts_dir, "first"),
         display_filename="article.pdf",
-        glossary=glossaries.resolve(historical.glossary_id, expected_revision=1),
+        glossary=glossaries.resolve(
+            historical.glossary_id, source_language="Danish", expected_revision=1
+        ),
     )
     second = manager.submit(
         upload_path=_stage_pdf(config.paths.artifacts_dir, "second"),
         display_filename="article.pdf",
-        glossary=glossaries.resolve(modern.glossary_id, expected_revision=1),
+        glossary=glossaries.resolve(
+            modern.glossary_id, source_language="Danish", expected_revision=1
+        ),
     )
     french_config = config.model_copy(
         update={
@@ -481,10 +488,13 @@ def test_web_jobs_run_in_order_and_preserve_distinct_glossary_runs(
     third = manager.submit(
         upload_path=_stage_pdf(config.paths.artifacts_dir, "third"),
         display_filename="article.pdf",
-        glossary=glossaries.resolve(modern.glossary_id, expected_revision=1),
+        glossary=glossaries.resolve(
+            modern.glossary_id, source_language="Danish", expected_revision=1
+        ),
         runtime_config=french_config,
     )
     glossaries.save(
+        source_language="Danish",
         glossary_id=modern.glossary_id,
         expected_revision=1,
         name="Modern",
@@ -917,9 +927,45 @@ def test_costs_learn_from_completed_runs_and_survive_restart(tmp_path: Path) -> 
         assert estimate.json()["total_usd"] == pytest.approx(0.2)
         assert estimate.json()["sample_pages"] == 1
         assert "Source text" not in estimate.text
+        canonical = list(config.paths.artifacts_dir.glob("**/output/document.json"))
+        originals = {path: path.read_bytes() for path in canonical}
+        assert originals
+        client.get("/session")
+        headers = {"X-CSRF-Token": client.cookies["at_csrf"]}
+        for currency in config.costs.currency_choices:
+            preferences = client.get("/api/config").json()["preferences"]
+            preferences["values"]["currency"] = currency
+            assert (
+                client.put(
+                    "/api/settings",
+                    json={
+                        "values": preferences["values"],
+                        "expected_revision": preferences["revision"],
+                    },
+                    headers=headers,
+                ).status_code
+                == 200
+            )
+            status = client.get(f"/api/jobs/{run_id}").json()
+            cost = status["cost"]
+            factor = (
+                config.costs.exchange_rates.units_per_eur[currency]
+                / config.costs.exchange_rates.units_per_eur["USD"]
+            )
+            assert cost["currency"] == currency
+            assert cost["total_usd"] == pytest.approx(0.02)
+            assert cost["total"] == pytest.approx(0.02 * factor)
+            assert client.get("/api/jobs").json()["jobs"][0]["cost"] == cost
+            assert client.get(f"/api/jobs/{run_id}/review").json()["cost"] == cost
+            assert client.get("/api/cost-estimate", params=params).json()["total"] == pytest.approx(
+                0.2 * factor
+            )
+            assert {path: path.read_bytes() for path in canonical} == originals
     restarted = new_manager()
     try:
-        assert restarted.get(run_id).cost == status["cost"]
+        assert restarted.get(run_id).cost is not None
+        with TestClient(create_app(config, job_manager=restarted)) as client:
+            assert client.get(f"/api/jobs/{run_id}").json()["cost"] == status["cost"]
         assert restarted.estimate_cost(
             model="gpt-6-astra", page_count=10, thinking_level="default"
         ).total_usd == pytest.approx(0.2)

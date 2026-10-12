@@ -75,6 +75,8 @@ def create_router(services: WebServices) -> APIRouter:
                     for model in config.provider.settings_for(name).selectable_models
                 ],
             },
+            "currency_choices": config.costs.currency_choices,
+            "exchange_rates": config.costs.exchange_rates.model_dump(mode="json"),
             "language_choices": config.web.language_choices,
             "api_keys": {
                 name: api_key_status(local_secret_store, name) for name in SUPPORTED_PROVIDERS
@@ -115,7 +117,7 @@ def create_router(services: WebServices) -> APIRouter:
     ) -> dict[str, object]:
         require_csrf(at_csrf, x_csrf_token)
         if command.values.default_glossary not in {"none", "configured"} and not any(
-            g.glossary_id == command.values.default_glossary
+            g.glossary_id == command.values.default_glossary and g.source_language is not None
             for g in glossary_service.list_glossaries()
         ):
             raise HTTPException(status_code=422, detail="Select an existing default glossary")

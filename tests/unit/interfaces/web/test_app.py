@@ -40,6 +40,7 @@ def test_settings_are_persistent_validated_and_snapshotted_per_job(tmp_path: Pat
         glossary = client.post(
             "/api/glossaries",
             json={
+                "source_language": "Danish",
                 "name": "Medical",
                 "entries": [{"source_term": "Vattersot", "target_translation": "Dropsy"}],
             },
@@ -62,6 +63,7 @@ def test_settings_are_persistent_validated_and_snapshotted_per_job(tmp_path: Pat
             ("default_model", "gemini-3.5-flash"),
             ("default_style", "absent"),
             ("default_glossary", "../../file"),
+            ("currency", "JPY"),
         ):
             assert (
                 client.put(
@@ -867,6 +869,7 @@ def test_glossary_routes_persist_selection_and_protect_mutations(tmp_path: Path)
         client.get("/session")
         headers = {"X-CSRF-Token": client.cookies["at_csrf"]}
         command = {
+            "source_language": "Danish",
             "name": "Historical",
             "entries": [{"source_term": "Vattersot", "target_translation": "Dropsy"}],
         }
@@ -903,6 +906,7 @@ def test_glossary_routes_persist_selection_and_protect_mutations(tmp_path: Path)
         assert submit({"glossary_id": "configured"}).status_code == 202
         assert manager.submissions[-1][4].translation.glossary == {"Baseline": "Default"}
         changed = {
+            "source_language": "Danish",
             "name": "Modern",
             "entries": [{"source_term": "Vattersot", "target_translation": "Edema"}],
             "expected_revision": 1,
@@ -934,10 +938,18 @@ def test_glossary_routes_persist_selection_and_protect_mutations(tmp_path: Path)
 @pytest.mark.parametrize(
     "command",
     [
-        {"name": "Bad", "entries": [], "unknown": True},
-        {"name": "Bad", "entries": []},
-        {"name": "N" * 101, "entries": [{"source_term": "A", "target_translation": "B"}]},
-        {"name": "Bad", "entries": [{"source_term": "A" * 501, "target_translation": "B"}]},
+        {"source_language": "Danish", "name": "Bad", "entries": [], "unknown": True},
+        {"source_language": "Danish", "name": "Bad", "entries": []},
+        {
+            "source_language": "Danish",
+            "name": "N" * 101,
+            "entries": [{"source_term": "A", "target_translation": "B"}],
+        },
+        {
+            "source_language": "Danish",
+            "name": "Bad",
+            "entries": [{"source_term": "A" * 501, "target_translation": "B"}],
+        },
     ],
 )
 def test_glossary_requests_enforce_strict_models_and_configured_limits(
@@ -953,6 +965,109 @@ def test_glossary_requests_enforce_strict_models_and_configured_limits(
         )
         assert response.status_code == 422
         assert client.get("/api/glossaries").json() == {"glossaries": []}
+
+
+@pytest.mark.parametrize("language", [None, "", "   ", "a" * 101])
+def test_glossary_requires_a_source_language(tmp_path: Path, language: str | None) -> None:
+    with TestClient(
+        create_app(
+            configured_for_tmp(tmp_path), job_manager=cast(JobManager, RecordingJobManager())
+        )
+    ) as client:
+        client.get("/session")
+        response = client.post(
+            "/api/glossaries",
+            json={
+                "source_language": language,
+                "name": "Medicine",
+                "entries": [{"source_term": "A", "target_translation": "B"}],
+            },
+            headers={"X-CSRF-Token": client.cookies["at_csrf"]},
+        )
+        assert response.status_code == 422
+        assert client.get("/api/glossaries").json() == {"glossaries": []}
+
+
+def test_glossary_language_selection_and_default_fallback(tmp_path: Path) -> None:
+    config = configured_for_tmp(tmp_path)
+    config.translation.glossary = {"Baseline": "Danish only"}
+    manager = RecordingJobManager()
+    with TestClient(create_app(config, job_manager=cast(JobManager, manager))) as client:
+        client.get("/session")
+        headers = {"X-CSRF-Token": client.cookies["at_csrf"]}
+        saved = client.post(
+            "/api/glossaries",
+            json={
+                "source_language": "Old Danish",
+                "name": "Medicine",
+                "entries": [{"source_term": "Vattersot", "target_translation": "Dropsy"}],
+            },
+            headers=headers,
+        ).json()
+        assert client.get("/api/glossaries", params={"source_language": " old DANISH "}).json() == {
+            "glossaries": [saved]
+        }
+        assert client.get("/api/glossaries", params={"source_language": "German"}).json() == {
+            "glossaries": []
+        }
+        preferences = client.get("/api/config").json()["preferences"]
+        preferences["values"]["default_glossary"] = saved["glossary_id"]
+        assert (
+            client.put(
+                "/api/settings",
+                json={
+                    "values": preferences["values"],
+                    "expected_revision": 0,
+                },
+                headers=headers,
+            ).status_code
+            == 200
+        )
+
+        def submit(language: str, **selection: str) -> Response:
+            return client.post(
+                "/api/jobs",
+                files={"pdf": ("test.pdf", b"%PDF-1.7", "application/pdf")},
+                headers=headers,
+                data={
+                    "settings": json.dumps(
+                        {
+                            "source_language": language,
+                            "target_language": config.translation.target_language,
+                            "model": config.provider.selected.model,
+                            "style": config.translation.style.value,
+                            "previous_page_context_count": (
+                                config.translation.previous_page_context_count
+                            ),
+                            "image_dpi": config.extraction.image_dpi,
+                            "auto_continue": False,
+                        }
+                    ),
+                    **selection,
+                },
+            )
+
+        assert submit("Old Danish").status_code == 202
+        assert manager.submissions[-1][2] == {"Vattersot": "Dropsy"}
+        assert submit("German").status_code == 202
+        assert manager.submissions[-1][2] == {}
+        assert manager.submissions[-1][4].translation.glossary == {}
+        before = len(manager.submissions)
+        assert (
+            submit("German", glossary_id=saved["glossary_id"], glossary_revision="1").status_code
+            == 422
+        )
+        assert submit("German", glossary_id="configured").status_code == 422
+        assert len(manager.submissions) == before
+        assert (
+            submit(
+                "German",
+                glossary=json.dumps([{"source_term": "Wasser", "target_translation": "Water"}]),
+            ).status_code
+            == 202
+        )
+        assert manager.submissions[-1][2] == {"Wasser": "Water"}
+        assert manager.submissions[-1][4].translation.glossary == {}
 
 
 def test_pdf_info_counts_locally_and_always_cleans_staging(tmp_path: Path) -> None:

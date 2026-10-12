@@ -1,3 +1,4 @@
+import { costBreakdown } from "./exports.js";
 import {
   apiRequest
 } from "./api.js";
@@ -8,6 +9,7 @@ import {
   dismissAlert,
   newTranslationButton,
   refreshTranslationsButton,
+  reviewEditor,
   reviewList,
   reviewPanel,
   reviewZoomSelect,
@@ -23,7 +25,8 @@ import {
 } from "./context.js";
 import {
   activateTab,
-  clearGlobalError
+  clearGlobalError,
+  showGlobalError
 } from "./dom.js";
 import {
   handleReviewClick,
@@ -84,6 +87,18 @@ export async function initializeEditor() {
   window.transcriblEditor = {
     open: openLibraryReview,
     refresh: loadTranslationLibrary,
+    async refreshCosts() {
+      await loadTranslationLibrary();
+      if (state.review && state.jobId && !reviewEditor.hidden) {
+        try {
+          const job = await apiRequest(`/api/jobs/${encodeURIComponent(state.jobId)}`);
+          state.review.cost = job.cost;
+          document.getElementById("review-cost").replaceChildren(...(job.cost ? [costBreakdown(job.cost)] : []));
+        } catch (error) {
+          showGlobalError(error.message);
+        }
+      }
+    },
     async initialize() {
       await fetch('/backend/session', {credentials: 'same-origin'});
       state.config = await apiRequest('/api/config');

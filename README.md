@@ -145,14 +145,18 @@ host/port and use the same application services.
   **Continue** validates and reuses them before another attempt, while **Cancel**
   pauses the screen without deleting those artifacts.
 - **Glossaries** manages separate named sets of required source-term translations.
-  Create, rename, edit, save, or delete each glossary locally. On **Translate**,
-  choose one saved glossary, **Configured defaults** (when the TOML glossary has
-  entries), or **No glossary**. A saved glossary replaces the configured terms in
-  full. Unsaved edits must be saved before using the selected glossary. Each job
+  Assign a source language when creating or editing a glossary, including a
+  **Custom** language when needed. **Translate** offers only glossaries matching
+  its source language (ignoring capitalization and surrounding spaces). Changing
+  source language clears an incompatible selection. Choose one saved glossary,
+  **Configured defaults** (when the TOML glossary has entries and its configured
+  source language matches), or **No glossary**. A saved glossary replaces the
+  configured terms in full. Unsaved edits must be saved before using the selected glossary. Each job
   snapshots the saved terms; later glossary changes never alter that run.
 - **Settings** starts with **Default model**, **Default style**, **Default glossary**
-  (initially **None**), and **API Keys**. **Save settings** persists non-secret
-  preferences atomically in `.settings.toml` under the configured artifact root.
+  (initially **None**), **Price currency** (initially **DKK**), and **API Keys**.
+  **Save settings** persists non-secret preferences atomically in `.settings.toml`
+  under the configured artifact root.
   Defaults survive restarts; existing runs and deliberate per-job overrides are
   unchanged. **Reload saved settings** discards unsaved settings edits.
   **Advanced settings** contains thinking levels for each provider, default
@@ -218,8 +222,10 @@ the server on a network.
 
 ### Translation costs
 
-Selecting a PDF counts its physical pages locally and shows an approximate USD
-cost before submission. Changing the model recalculates it without a provider
+Selecting a PDF counts its physical pages locally and shows an approximate
+cost in DKK before submission. **Settings → Price currency** offers DKK, EUR,
+USD and GBP and persists the choice on this computer. Changing currency updates
+estimates, finished-job prices, the Articles catalog and the open review. Changing the model recalculates it without a provider
 call. The estimate uses average recorded input/output tokens per completed page,
 including table passes, multiplied by the selected model's rates and PDF page
 count. It prefers the same model and thinking level, then the same model,
@@ -233,6 +239,16 @@ totals and pricing details. Existing completed runs are included after restart;
 canonical documents and editorial revisions are never rewritten for pricing.
 Prices are display projections from the current TOML price table, so updating
 that table can change displayed historical costs. This is not a billing ledger.
+
+Token prices and accounting remain in USD. Display conversion uses the dated
+[ECB reference rates](https://www.ecb.europa.eu/stats/policy_and_exchange_rates/euro_reference_exchange_rates/html/index.ff.html)
+in `[costs.exchange_rates]` (checked October 12, 2026), via the EUR reference base.
+These rates are fixed until the TOML is updated; no live exchange lookup runs when
+using the app. The reference date appears in Settings and converted cost details.
+Bank conversion fees and taxes are excluded. `[costs]` owns `default_currency`
+and `currency_choices`; older personal TOML files need these settings plus the
+complete `exchange_rates` table from the checked-in defaults. Older saved
+`.settings.toml` files inherit the configured default currency without a rewrite.
 
 Rates were checked on October 12, 2026 against the official
 [OpenAI](https://developers.openai.com/api/docs/pricing),
@@ -433,7 +449,11 @@ and [Gemini 3.8 Flash](https://ai.google.dev/gemini-api/docs/models/gemini-3.8-f
 ### Saved glossaries
 
 Saved glossaries live in `<artifacts_dir>/.glossaries.json`, a versioned local
-catalog written atomically. Names and source terms must be unique within their
+catalog written atomically (library schema 2.0). Source language is required for
+new or edited glossaries. Schema 1.0 catalogs load in memory with **Language not
+assigned**; their entries are preserved, but they cannot be selected until you
+assign a language and save. Reads do not rewrite the old catalog. A default
+glossary for a different source language falls back to **No glossary**. Names and source terms must be unique within their
 respective scopes; original Unicode text is preserved. `web.max_glossary_entries`
 and `web.max_term_characters` limit each glossary, while the new required
 `web.max_glossary_name_characters` limits its name (100 in the default TOML).
@@ -446,7 +466,7 @@ persisted in each run's translation settings and participates in both page and
 table checkpoint fingerprints. Renaming or deleting a saved glossary cannot
 change the snapshot of a queued, completed, or stopped run. No database or remote
 storage is used. The older inline-glossary HTTP input remains supported for local
-clients and retains its configured-default merge behavior.
+clients and merges configured defaults only when the source languages match.
 
 ## Canonical data and output artifacts
 

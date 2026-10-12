@@ -51,6 +51,7 @@ def test_preferences_round_trip_conflicts_and_immutable_config(tmp_path: Path) -
         {"api_key": "never-store-secrets"},
         {"previous_page_context_count": 11},
         {"image_dpi": 601},
+        {"currency": "JPY"},
     ],
 )
 def test_preferences_reject_invalid_values(invalid: dict[str, object]) -> None:
@@ -75,3 +76,27 @@ def test_preferences_reject_unsupported_models_levels_and_corrupt_files(tmp_path
     with pytest.raises(PreferencesStorageError):
         repository.load(values)
     assert repository.path.read_text() == "broken = ["
+
+
+def test_currency_preference_migrates_without_rewriting_old_settings(tmp_path: Path) -> None:
+    config = load_project_config(Path("config/default.toml"))
+    defaults = workbench_defaults(config)
+    assert defaults.currency == "DKK"
+    repository = FilesystemPreferencesRepository(tmp_path)
+    repository.save(defaults, expected_revision=0)
+    old = "\n".join(
+        line
+        for line in repository.path.read_text().splitlines()
+        if not line.startswith("currency =")
+    )
+    repository.path.write_text(old)
+    loaded = repository.load(defaults)
+    assert loaded.values.currency == "DKK"
+    assert repository.path.read_text() == old
+    loaded.values.currency = "EUR"
+    repository.save(loaded.values, expected_revision=1)
+    assert repository.load(defaults).values.currency == "EUR"
+    resolved = resolve_workbench_preferences(config, loaded.values)
+    assert resolved.costs.default_currency == "EUR"
+    assert resolved.translation == config.translation
+    assert resolved.provider == config.provider

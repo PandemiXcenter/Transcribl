@@ -79,9 +79,11 @@ Implemented:
 - TOML-configured context from 0–10 finalized preceding same-run machine page
   translations (default 2), shared by primary and table prompts and constrained
   to current-page-only output;
-- named local glossaries with per-job selection and immutable term snapshots;
-- pre-submission USD estimates learned from completed page usage, including table
-  passes, and approximate recorded costs on finished jobs and Articles;
+- named local glossaries with source-language filtering, per-job selection, legacy
+  language assignment and immutable term snapshots;
+- pre-submission estimates learned from completed page usage, including table
+  passes, and approximate recorded costs on finished jobs and Articles; DKK by
+  default with saved EUR/USD/GBP choices using configured dated ECB rates;
 - persisted workbench defaults, provider thinking controls, and editable named
   styles with exact prompt inspection and checkpoint invalidation;
 - per-job input/output languages, style, and allowlisted provider model, with TOML

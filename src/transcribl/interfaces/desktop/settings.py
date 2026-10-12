@@ -41,6 +41,19 @@ class SettingsPanel:
                     .props("outlined dense")
                     .classes("w-full")
                 )
+                self.currency = (
+                    ui.select(
+                        self.workbench.public["currency_choices"],
+                        value=self.workbench.preferences.currency,
+                        label="Price currency",
+                    )
+                    .props("outlined dense")
+                    .classes("w-full")
+                )
+                ui.label(
+                    "Reference exchange rates: "
+                    f"{self.workbench.public['exchange_rates']['checked_on']}"
+                ).classes("workbench-subtle")
                 self.workbench.credentials.api_key_controls()
                 ui.button(
                     "API Keys", icon="key", on_click=self.workbench.credentials.api_keys_dialog.open
@@ -201,6 +214,7 @@ class SettingsPanel:
     async def save_settings(self) -> None:
         try:
             values = {
+                "currency": self.currency.value,
                 "default_model": self.settings_model.value,
                 "default_style": self.settings_style.value,
                 "default_glossary": self.settings_glossary.value,
@@ -217,9 +231,9 @@ class SettingsPanel:
                 json={"values": values, "expected_revision": self.settings_revision},
             )
             self.apply_saved_settings(public)
-            await self.workbench.translation.refresh_estimate()
+            await self.refresh_prices()
             self.settings_message.set_text(
-                "Settings saved for new translations. Existing runs are unchanged."
+                "Settings saved. Prices updated; translation defaults apply to new runs."
             )
         except DesktopRequestError as exc:
             self.settings_message.set_text(str(exc))
@@ -227,10 +241,21 @@ class SettingsPanel:
     async def reload_settings(self) -> None:
         try:
             self.apply_saved_settings(await self.workbench.session.request("GET", "/api/config"))
-            await self.workbench.translation.refresh_estimate()
+            await self.refresh_prices()
             self.settings_message.set_text("Saved settings loaded.")
         except DesktopRequestError as exc:
             self.settings_message.set_text(str(exc))
+
+    async def refresh_prices(self) -> None:
+        translation = self.workbench.translation
+        await translation.refresh_estimate()
+        if translation.job and translation.job.get("cost"):
+            translation.job = await self.workbench.session.request(
+                "GET", f"/api/jobs/{translation.job['job_id']}"
+            )
+            translation.render_progress()
+        if self.workbench.editor_ready:
+            await ui.run_javascript("window.transcriblEditor.refreshCosts()")
 
     def apply_saved_settings(self, public: dict[str, Any]) -> None:
         previous = self.workbench.preferences
@@ -241,6 +266,7 @@ class SettingsPanel:
         self.settings_revision = public["preferences"]["revision"]
         saved = self.workbench.preferences
         self.style_prompts = dict(saved.style_prompts)
+        self.currency.set_value(saved.currency)
         self.settings_model.set_value(saved.default_model)
         self.settings_style.set_options(list(self.style_prompts), value=saved.default_style)
         self.style_editor_choice.set_options(list(self.style_prompts), value=saved.default_style)
@@ -275,7 +301,10 @@ class SettingsPanel:
             (self.workbench.translation.auto_continue, previous.auto_continue, saved.auto_continue),
         ]
         for job_field, old, new in updates:
-            if job_field.value == old:
+            if job_field.value == old and (
+                job_field is not self.workbench.translation.glossary_choice
+                or new in job_field.options
+            ):
                 job_field.set_value(new)
         style = (
             self.workbench.translation.style

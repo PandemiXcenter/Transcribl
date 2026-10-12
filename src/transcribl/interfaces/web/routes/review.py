@@ -15,6 +15,7 @@ from transcribl.application.editorial import EditorialService
 from transcribl.domain.errors import (
     ArtifactError,
 )
+from transcribl.interfaces.web.cost_payloads import cost_payload
 from transcribl.interfaces.web.review_context import document_context, review_context
 from transcribl.interfaces.web.review_payloads import default_continue_page, review_payload
 from transcribl.interfaces.web.schemas import (
@@ -37,7 +38,7 @@ def create_router(services: WebServices) -> APIRouter:
         document, translation_run_id, service, review = review_context(manager, job_id)
         position = service.get_review_position(document, translation_run_id)
         payload = review_payload(review)
-        payload["cost"] = recorded_cost(document, config.costs).model_dump(mode="json")
+        payload["cost"] = cost_payload(recorded_cost(document, config.costs), services.settings)
         payload["continue_page"] = (
             position.original_page_number if position is not None else default_continue_page(review)
         )

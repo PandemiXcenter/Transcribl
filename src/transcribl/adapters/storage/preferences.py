@@ -25,7 +25,10 @@ class FilesystemPreferencesRepository:
             try:
                 if not self.path.exists():
                     return SavedPreferences(revision=0, values=defaults)
-                return SavedPreferences.model_validate(tomllib.loads(self.path.read_text("utf-8")))
+                payload = tomllib.loads(self.path.read_text("utf-8"))
+                if isinstance(payload.get("values"), dict):
+                    payload["values"].setdefault("currency", defaults.currency)
+                return SavedPreferences.model_validate(payload)
             except (OSError, ValueError):
                 raise PreferencesStorageError("Local settings are unavailable or invalid") from None
 

@@ -14,6 +14,7 @@ from fastapi import (
 from starlette.concurrency import run_in_threadpool
 
 from transcribl.adapters.extraction.pdf_info import pdf_page_count
+from transcribl.interfaces.web.cost_payloads import cost_payload
 from transcribl.interfaces.web.security import require_csrf
 from transcribl.interfaces.web.services import WebServices
 from transcribl.interfaces.web.uploads import remove_upload_directory, stage_upload
@@ -50,8 +51,9 @@ def create_router(services: WebServices) -> APIRouter:
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         level = settings_service.resolved().provider.settings_for(provider).thinking_level
-        return manager.estimate_cost(
-            model=model, page_count=page_count, thinking_level=level
-        ).model_dump(mode="json")
+        return cost_payload(
+            manager.estimate_cost(model=model, page_count=page_count, thinking_level=level),
+            settings_service,
+        )
 
     return router

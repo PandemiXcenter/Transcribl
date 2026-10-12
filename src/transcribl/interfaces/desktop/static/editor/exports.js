@@ -36,9 +36,9 @@ export function makeExportMenu(jobId) {
 }
 
 export function costBreakdown(cost) {
-  const text = cost.total_usd == null
+  const text = cost.total == null
     ? "Recorded cost unavailable"
-    : `Recorded cost ≈ $${Number(cost.total_usd).toFixed(4)} USD`;
+    : `Recorded cost ≈ ${Number(cost.total).toFixed(4)} ${cost.currency}`;
   const breakdown = createElement("details", "cost-breakdown");
   const summary = createElement("summary", "", text);
   summary.title = "Show token usage and pricing details";

@@ -124,6 +124,8 @@ readable = "Prioritize fluent modern target-language prose without omitting, sum
 # Approximate standard paid-tier USD prices, per one million tokens.
 # Pricing is a display projection, never part of translation/cache identity.
 [costs]
+default_currency = "DKK"
+currency_choices = ["DKK", "EUR", "USD", "GBP"]
 minimum_matching_pages = 5
 max_history_pages = 1000
 
@@ -193,3 +195,12 @@ long_input_usd_per_million = 0.5
 long_output_usd_per_million = 2.5
 checked_on = 2026-10-12
 source = "https://platform.claude.com/docs/en/about-claude/pricing"
+
+[costs.exchange_rates]
+checked_on = 2026-10-12
+source = "https://www.ecb.europa.eu/stats/policy_and_exchange_rates/euro_reference_exchange_rates/html/index.ff.html"
+[costs.exchange_rates.units_per_eur]
+EUR = 1.0
+USD = 1.1181
+DKK = 7.4748
+GBP = 0.84478

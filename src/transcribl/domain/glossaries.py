@@ -5,6 +5,7 @@ from typing import Annotated, Literal, Self
 from pydantic import Field, model_validator
 
 from transcribl.domain.errors import TranscriblError
+from transcribl.domain.languages import LanguageName
 from transcribl.domain.models import ContractModel, NonEmptyText
 
 GlossaryId = Annotated[str, Field(pattern=r"^[0-9a-f]{32}$")]
@@ -18,6 +19,7 @@ class GlossaryEntry(ContractModel):
 class SavedGlossary(ContractModel):
     glossary_id: GlossaryId
     name: NonEmptyText
+    source_language: LanguageName | None = None
     revision: int = Field(ge=1)
     entries: list[GlossaryEntry] = Field(min_length=1)
 
@@ -33,7 +35,7 @@ class SavedGlossary(ContractModel):
 
 
 class GlossaryLibrary(ContractModel):
-    schema_version: Literal["1.0"] = "1.0"
+    schema_version: Literal["2.0"] = "2.0"
     glossaries: list[SavedGlossary] = Field(default_factory=list)
 
     @model_validator(mode="after")

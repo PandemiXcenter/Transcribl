@@ -51,7 +51,11 @@ async def test_desktop_session_preserves_csrf_validation_and_key_redaction(tmp_p
     await session.initialize()
     with pytest.raises(DesktopRequestError, match="Invalid request token"):
         session.client.cookies.clear()
-        await session.request("POST", "/api/glossaries", json={"name": "Test", "entries": []})
+        await session.request(
+            "POST",
+            "/api/glossaries",
+            json={"source_language": "Danish", "name": "Test", "entries": []},
+        )
     await session.initialize()
     status = await session.request(
         "POST",
@@ -89,6 +93,7 @@ async def test_nicegui_glossary_language_settings_and_submission(tmp_path: Path)
         await user.should_see("Translate PDF")
         workbench = windows[0]
         with user:
+            workbench.translation.source.set_value("Old Danish")
             await workbench.glossaries.refresh_glossaries()
             await workbench.translation.start_translation()
             assert workbench.translation.translate_error.text == "Choose a PDF first."
@@ -103,6 +108,12 @@ async def test_nicegui_glossary_language_settings_and_submission(tmp_path: Path)
             assert workbench.glossaries.editing is not None
             selected_id = workbench.glossaries.editing["glossary_id"]
             assert workbench.translation.glossary_choice.value == selected_id
+            workbench.translation.source.set_value("German")
+            assert selected_id not in workbench.translation.glossary_choice.options
+            assert workbench.translation.glossary_choice.value == "none"
+            workbench.translation.source.set_value(" old danish ")
+            assert selected_id in workbench.translation.glossary_choice.options
+            workbench.translation.glossary_choice.set_value(selected_id)
             workbench.tabs.set_value("Settings")
             workbench.settings.settings_model.set_value("gpt-6-astra")
             await workbench.settings.save_settings()
@@ -339,10 +350,10 @@ async def test_upload_estimate_model_change_and_removed_file(tmp_path: Path) -> 
                 )
             )
             assert workbench.translation.pdf_page_count == 2
-            assert "$0.0200 USD" in workbench.translation.estimate_label.text
+            assert "0.1337 DKK" in workbench.translation.estimate_label.text
             assert "120 completed pages" in workbench.translation.estimate_details.text
             workbench.translation.job_model.set_value("gpt-6-astra")
-        await user.should_see("Estimated cost ≈ $0.2000 USD · 2 pages at $0.1000/page")
+        await user.should_see("Estimated cost ≈ 1.3371 DKK · 2 pages at 0.6685 DKK/page")
         with user:
             workbench.translation.remove_file()
             assert workbench.translation.estimate_label.text == ""
@@ -353,8 +364,8 @@ async def test_upload_estimate_model_change_and_removed_file(tmp_path: Path) -> 
                 "status": "ready",
                 "total_pages": 2,
                 "current_page": 2,
-                "cost": {"total_usd": 0.025},
+                "cost": {"total_usd": 0.025, "total": 0.1671, "currency": "DKK"},
             }
             workbench.translation.render_progress()
-            assert "$0.0250 USD" in workbench.translation.progress_cost.text
+            assert "0.1671 DKK" in workbench.translation.progress_cost.text
             await workbench.close()

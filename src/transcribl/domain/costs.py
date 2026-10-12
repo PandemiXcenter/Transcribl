@@ -5,6 +5,7 @@ from typing import Literal, Self
 
 from pydantic import Field, HttpUrl, model_validator
 
+from transcribl.domain.currency import Currency, ExchangeRates
 from transcribl.domain.models import ContractModel
 
 
@@ -35,12 +36,20 @@ class TokenPrice(ContractModel):
 
 
 class CostSettings(ContractModel):
+    default_currency: Currency
+    currency_choices: list[Currency] = Field(min_length=1)
+    exchange_rates: ExchangeRates
     minimum_matching_pages: int = Field(ge=1, le=1000)
     max_history_pages: int = Field(ge=1, le=100_000)
     prices: dict[str, TokenPrice]
 
     @model_validator(mode="after")
     def enough_history(self) -> Self:
+        if (
+            len(set(self.currency_choices)) != len(self.currency_choices)
+            or self.default_currency not in self.currency_choices
+        ):
+            raise ValueError("Currency choices must be unique and include the default")
         if self.minimum_matching_pages > self.max_history_pages:
             raise ValueError("History limit must accommodate minimum matching pages")
         return self
@@ -48,7 +57,11 @@ class CostSettings(ContractModel):
 
 class CostSummary(ContractModel):
     kind: Literal["estimate", "recorded"]
-    currency: Literal["USD"] = "USD"
+    currency: Currency = "USD"
+    total: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    per_page: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    exchange_rate: float | None = Field(default=None, gt=0, allow_inf_nan=False)
+    exchange_rate_checked_on: date | None = None
     total_usd: float | None = Field(default=None, ge=0, allow_inf_nan=False)
     per_page_usd: float | None = Field(default=None, ge=0, allow_inf_nan=False)
     page_count: int = Field(ge=1)

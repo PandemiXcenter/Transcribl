@@ -4,7 +4,9 @@ from typing import TYPE_CHECKING, Any
 
 from nicegui import events, ui
 
+from transcribl.domain.languages import same_language
 from transcribl.interfaces.desktop.session import DesktopRequestError
+from transcribl.interfaces.desktop.widgets import LanguageField
 
 if TYPE_CHECKING:
     from transcribl.interfaces.desktop.workbench import Workbench
@@ -49,6 +51,11 @@ class GlossariesPanel:
                         f"maxlength={self.workbench.config.web.max_glossary_name_characters}"
                     )
                     .classes("w-full")
+                )
+                self.glossary_language = LanguageField(
+                    "Glossary source language",
+                    self.workbench.translation.source.value,
+                    self.workbench.config.web.language_choices,
                 )
                 self.term_table = (
                     ui.table(
@@ -101,6 +108,8 @@ class GlossariesPanel:
                     ).props("flat color=negative")
                     self.delete_glossary_button.set_visibility(False)
                 self.glossary_message = ui.label().props("role=status")
+                self.glossary_language.select.on_value_change(self.mark_dirty)
+                self.glossary_language.custom.on_value_change(self.mark_dirty)
 
     def set_glossary_busy(self, busy: bool) -> None:
         self.glossary_busy = busy
@@ -130,10 +139,19 @@ class GlossariesPanel:
         self.rows = [dict(row) for row in self.editing["entries"]] if self.editing else []
         self.glossary_select.set_value(glossary_id if self.editing else "")
         self.glossary_name.set_value(self.editing["name"] if self.editing else "")
+        self.glossary_language.set_value(
+            (self.editing.get("source_language") or "")
+            if self.editing
+            else self.workbench.translation.source.value
+        )
         self.render_rows()
         self.dirty = False
         ui.run_javascript("window.transcriblGlossaryDirty = false;")
-        self.glossary_message.set_text("")
+        self.glossary_message.set_text(
+            "Assign a source language before using this glossary."
+            if self.editing and not self.editing.get("source_language")
+            else ""
+        )
         self.delete_glossary_button.set_visibility(self.editing is not None)
 
     def render_rows(self) -> None:
@@ -166,21 +184,41 @@ class GlossariesPanel:
             self.mark_dirty()
 
     def render_glossary_choices(self) -> None:
-        options = {g["glossary_id"]: g["name"] for g in self.glossaries}
-        self.glossary_select.set_options({"": "New glossary", **options})
-        job_options = {"none": "No glossary"}
-        if self.workbench.config.translation.glossary:
-            job_options["configured"] = "Configured defaults"
-        job_options.update(options)
+        labels = {
+            g["glossary_id"]: f"{g['name']} · {g.get('source_language') or 'Language not assigned'}"
+            for g in self.glossaries
+        }
+        self.glossary_select.set_options({"": "New glossary", **labels})
+        source = self.workbench.translation.source.value
+        options = {"none": "No glossary"}
+        configured = self.workbench.config.translation
+        if configured.glossary and same_language(configured.source_language, source):
+            options["configured"] = "Configured defaults"
+        options.update(
+            {
+                g["glossary_id"]: labels[g["glossary_id"]]
+                for g in self.glossaries
+                if same_language(g.get("source_language"), source)
+            }
+        )
+        choice = self.workbench.translation.glossary_choice
+        value = choice.value if choice.value in options else "none"
+        choice.set_options(options, value=value)
+        choice.enable()
+        settings_options = {
+            "none": "None",
+            **{
+                g["glossary_id"]: labels[g["glossary_id"]]
+                for g in self.glossaries
+                if g.get("source_language")
+            },
+        }
+        if configured.glossary:
+            settings_options["configured"] = f"Configured defaults · {configured.source_language}"
         default = self.workbench.preferences.default_glossary
-        if default not in job_options:
-            job_options[default] = "Deleted glossary — choose another"
-        self.workbench.translation.glossary_choice.set_options(job_options)
-        settings_options = {**job_options, "none": "None"}
+        if default not in settings_options:
+            settings_options[default] = "Unavailable glossary — choose another"
         self.workbench.settings.settings_glossary.set_options(settings_options)
-        if self.workbench.translation.glossary_choice.value not in job_options:
-            self.workbench.translation.glossary_choice.set_value("none")
-        self.workbench.translation.glossary_choice.enable()
 
     async def refresh_glossaries(self) -> None:
         if self.glossary_busy:
@@ -216,6 +254,7 @@ class GlossariesPanel:
                 f"/api/glossaries/{glossary_id}" if glossary_id else "/api/glossaries",
                 json={
                     "name": self.glossary_name.value,
+                    "source_language": self.glossary_language.value,
                     "entries": self.rows,
                     "expected_revision": self.editing["revision"] if self.editing else None,
                 },
@@ -226,7 +265,10 @@ class GlossariesPanel:
             )
             self.render_glossary_choices()
             self.edit_glossary(saved["glossary_id"])
-            if glossary_id is None:
+            if (
+                glossary_id is None
+                and saved["glossary_id"] in self.workbench.translation.glossary_choice.options
+            ):
                 self.workbench.translation.glossary_choice.set_value(saved["glossary_id"])
             self.glossary_message.set_text("Glossary saved.")
         except DesktopRequestError as exc:

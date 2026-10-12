@@ -13,6 +13,7 @@ from fastapi.responses import Response
 from transcribl.domain.glossaries import (
     GlossaryId,
 )
+from transcribl.domain.languages import LanguageName
 from transcribl.interfaces.web.schemas import (
     GlossaryWriteRequest,
 )
@@ -25,10 +26,11 @@ def create_router(services: WebServices) -> APIRouter:
     glossary_service = services.glossaries
 
     @router.get("/api/glossaries")
-    def list_glossaries() -> dict[str, object]:
+    def list_glossaries(source_language: LanguageName | None = None) -> dict[str, object]:
         return {
             "glossaries": [
-                item.model_dump(mode="json") for item in glossary_service.list_glossaries()
+                item.model_dump(mode="json")
+                for item in glossary_service.list_glossaries(source_language)
             ]
         }
 
@@ -40,7 +42,10 @@ def create_router(services: WebServices) -> APIRouter:
     ) -> dict[str, object]:
         require_csrf(at_csrf, x_csrf_token)
         return glossary_service.save(
-            name=command.name, entries=command.entries, expected_revision=command.expected_revision
+            name=command.name,
+            source_language=command.source_language,
+            entries=command.entries,
+            expected_revision=command.expected_revision,
         ).model_dump(mode="json")
 
     @router.put("/api/glossaries/{glossary_id}")
@@ -53,6 +58,7 @@ def create_router(services: WebServices) -> APIRouter:
         require_csrf(at_csrf, x_csrf_token)
         return glossary_service.save(
             name=command.name,
+            source_language=command.source_language,
             entries=command.entries,
             glossary_id=glossary_id,
             expected_revision=command.expected_revision,

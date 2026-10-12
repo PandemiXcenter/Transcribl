@@ -250,13 +250,13 @@ class TranslationPanel:
             )
             if generation != self.estimate_generation:
                 return
-            total = cost.get("total_usd")
+            total = cost.get("total")
             if total is None:
                 self.estimate_label.set_text(f"Cost estimate unavailable · {cost['basis']}")
                 return
             self.estimate_label.set_text(
-                f"Estimated cost ≈ ${total:.4f} USD · {self.pdf_page_count} pages "
-                f"at ${cost['per_page_usd']:.4f}/page"
+                f"Estimated cost ≈ {total:.4f} {cost['currency']} · {self.pdf_page_count} pages "
+                f"at {cost['per_page']:.4f} {cost['currency']}/page"
             )
             self.estimate_details.set_text(
                 f"Based on {cost['sample_pages']} completed pages ({cost['basis']}).\n"
@@ -372,8 +372,8 @@ class TranslationPanel:
         self.progress_error.set_text(job.get("error") or "")
         cost = job.get("cost")
         self.progress_cost.set_text(
-            f"Recorded cost ≈ ${cost['total_usd']:.4f} USD (approximate)"
-            if cost and cost.get("total_usd") is not None
+            f"Recorded cost ≈ {cost['total']:.4f} {cost['currency']} (approximate)"
+            if cost and cost.get("total") is not None
             else "Recorded cost unavailable"
             if cost
             else ""

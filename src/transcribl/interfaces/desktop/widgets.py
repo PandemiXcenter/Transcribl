@@ -25,6 +25,12 @@ class LanguageField:
             )
             self.custom.set_visibility(custom)
 
+    def set_value(self, value: str) -> None:
+        custom = value not in self.select.options or value == "Custom"
+        self.custom.set_value(value if custom else "")
+        self.select.set_value("Custom" if custom else value)
+        self.custom.set_visibility(custom)
+
     @property
     def value(self) -> str:
         return str(

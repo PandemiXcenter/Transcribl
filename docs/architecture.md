@@ -99,6 +99,13 @@ provider/model and token counts, independently of current UI model choices.
 
 `domain/costs.py` owns strict price and summary contracts; `[costs]` owns rates,
 source URLs, verification/expiry dates, context tiers and sampling limits.
+`domain/currency.py` validates the four display currencies and a complete dated
+EUR-base exchange table. `application/currency.py` converts the original USD
+projection, and `interfaces/web/cost_payloads.py` applies the saved preference to
+estimate/status/catalog/review responses consistently. The settings repository
+loads older preferences without a currency using the TOML default (DKK), without
+rewriting them. Currency changes refresh price elements without remounting the
+review or losing unsaved edits. No exchange-rate network call is made at runtime.
 Prices and estimates do not affect prompts, manifests or checkpoint identity.
 The Gemini adapter includes candidates plus thinking tokens in future output
 counts, recording an operational accounting marker without changing semantic
@@ -323,7 +330,7 @@ live table follow-up has been verified against a Gemini account.
 The selected saved glossary is resolved through `GlossaryService` and copied into
 the resolved `TranslationSettings`, replacing configured defaults in full. The
 user can instead select configured defaults or explicitly select no glossary.
-Legacy inline-glossary HTTP submissions retain their existing merge behavior. The prompt states that these source-to-target
+Legacy inline-glossary HTTP submissions merge configured terms only when their source language matches. The prompt states that these source-to-target
 mappings are authoritative; they are not suggestions inferred by the model.
 Input language, output language, model, and style can be selected for one web
 job. Their initial values and the selectable model allowlist come from TOML, and
@@ -723,8 +730,12 @@ operational timeout/retry/size settings do not invalidate completed pages.
 ## Named glossary library
 
 `SavedGlossary` and `GlossaryLibrary` are strict domain contracts with an
-independent library schema version 1.0; the canonical document schema is unchanged.
-`GlossaryService` owns name/term limits and submission-time revision validation.
+independent library schema version 2.0; the canonical document schema is unchanged.
+`SavedGlossary.source_language` is required on writes; null represents an unassigned
+legacy glossary. The filesystem adapter migrates schema 1.0 only in memory, keeping
+terms intact and leaving language unassigned rather than guessing. Such glossaries
+remain editable but unavailable to translation until assigned a language and saved.
+`GlossaryService` owns name/term limits and submission-time revision/language validation.
 Its repository port is implemented by a filesystem catalog at
 `<artifacts_dir>/.glossaries.json`, with atomic replacement and a process-wide lock.
 Save/delete operations compare the expected revision while holding that lock,
@@ -732,7 +743,12 @@ preventing two browser sessions from silently overwriting the same revision.
 This is single-process local coordination, not multi-process storage.
 
 The HTTP interface offers GET/POST `/api/glossaries` and PUT/DELETE
-`/api/glossaries/{id}`. Mutations retain CSRF protection and no-store headers.
+`/api/glossaries/{id}`. GET supports a `source_language` filter; matching trims
+surrounding whitespace and ignores case, including custom language names.
+Mutations retain CSRF protection and no-store headers. Desktop job choices update
+when the source language changes. A saved default for a different language falls
+back to none; an explicitly submitted mismatched glossary is rejected before
+staging. Configured mappings belong to the TOML translation source language.
 POST `/api/jobs` accepts a saved `glossary_id` and `glossary_revision`, or the
 explicit `none` choice. Mixing saved selection and inline mappings is rejected.
 Resolution occurs before upload staging. The job receives a copied dictionary,
