@@ -281,7 +281,7 @@ def test_editor_component_keeps_complete_review_and_delegated_events() -> None:
         "section-type-select",
         "footnote-owner-select",
         "footnote-anchor-input",
-        "data-editor-display-only",
+        "editorDisplayOnly",
         "paragraph-page-boundary page-sync-anchor",
     ):
         assert feature in script

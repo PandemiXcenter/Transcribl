@@ -6,6 +6,7 @@ import {
   fullSizePageLink,
   reviewZoomSelect,
   sourcePageImage,
+  reviewEditor,
   sourcePageLabel,
   state,
   translationContent,
@@ -15,8 +16,11 @@ import {
   asText,
   createElement,
   elementPositionInScroller,
-  pageDescription
+  pageDescription,
+  renderedPageElement
 } from "./dom.js";
+
+import { resizeSourceImage, sourceImageLoading } from "./viewport.js";
 
 export function pageImageUrl(pageNumber) {
   return `/backend/api/jobs/${encodeURIComponent(state.jobId)}/pages/${encodeURIComponent(
@@ -34,7 +38,9 @@ export function setReviewZoom(percent) {
   }
   state.reviewZoomPercent = normalized;
   reviewZoomSelect.value = String(normalized);
-  sourcePageImage.style.setProperty("--review-page-zoom", String(normalized / 100));
+  resizeSourceImage();
+  document.getElementById("zoom-out").disabled = normalized === allowedLevels[0];
+  document.getElementById("zoom-in").disabled = normalized === allowedLevels.at(-1);
 }
 
 export function showSourcePage(page) {
@@ -52,6 +58,7 @@ export function showSourcePage(page) {
   }
   const url = pageImageUrl(pageNumber);
   sourcePageImage.alt = `Original physical page ${pageNumber}`;
+  sourceImageLoading();
   sourcePageImage.src = url;
   fullSizePageLink.href = url;
 }
@@ -68,6 +75,11 @@ export function activateSourcePageNumber(pageNumber, { persist = true } = {}) {
     ? `Physical page ${label} · ${pageEntry.pdf_page_label}`
     : `Physical page ${label}`;
   showSourcePage(pageEntry);
+  document.getElementById("review-page-number").value = label;
+  document.getElementById("review-page-number").max = String(state.reviewPages.length);
+  document.getElementById("review-page-count").textContent = `of ${state.reviewPages.length}`;
+  document.getElementById("previous-review-page").disabled = Number(label) <= 1;
+  document.getElementById("next-review-page").disabled = Number(label) >= state.reviewPages.length;
   if (persist) {
     persistReviewPosition(Number(pageEntry.original_page_number));
   }
@@ -102,6 +114,7 @@ export function persistReviewPosition(pageNumber) {
 
 export function syncSourceToTranslation() {
   state.scrollFrame = null;
+  if (reviewEditor.hidden || !translationScroll.clientHeight) return;
   const pageAnchors = [
     ...translationContent.querySelectorAll(".page-sync-anchor[data-page-number]"),
   ];
@@ -109,6 +122,11 @@ export function syncSourceToTranslation() {
     return;
   }
   const scrollTop = translationScroll.scrollTop;
+  const scrollEnd = translationScroll.scrollHeight - translationScroll.clientHeight;
+  if (scrollEnd > 0 && scrollTop >= scrollEnd - 1) {
+    activateSourcePageNumber(state.reviewPages.at(-1).original_page_number);
+    return;
+  }
   const anchor = scrollTop + 76;
   let activePageAnchor = pageAnchors[0];
   for (const pageAnchor of pageAnchors) {
@@ -125,4 +143,42 @@ export function requestScrollSync() {
   if (state.scrollFrame === null) {
     state.scrollFrame = requestAnimationFrame(syncSourceToTranslation);
   }
+}
+
+export function reviewPageAnchor(pageNumber) {
+  return translationContent.querySelector(`.page-sync-anchor[data-page-number="${Number(pageNumber)}"]`)
+    || renderedPageElement(translationContent, pageNumber);
+}
+
+export function navigateReviewPage(pageNumber) {
+  const number = Number(pageNumber);
+  if (!Number.isInteger(number) || number < 1 || number > state.reviewPages.length) {
+    document.getElementById("review-page-number").value = String(state.sourcePageNumber || 1);
+    return;
+  }
+  // Prefer the inline physical-page anchor when a paragraph spans pages.
+  const anchor = reviewPageAnchor(number);
+  if (!anchor) return;
+  translationScroll.scrollTop = elementPositionInScroller(anchor, translationScroll);
+  activateSourcePageNumber(number);
+  translationScroll.focus({ preventScroll: true });
+}
+
+export function initializePageNavigation() {
+  document.getElementById("previous-review-page").addEventListener("click", () => navigateReviewPage(state.sourcePageNumber - 1));
+  document.getElementById("next-review-page").addEventListener("click", () => navigateReviewPage(state.sourcePageNumber + 1));
+  document.getElementById("review-page-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    navigateReviewPage(document.getElementById("review-page-number").value);
+  });
+  for (const [id, direction] of [["zoom-out", -1], ["zoom-in", 1]]) {
+    document.getElementById(id).addEventListener("click", () => {
+      const levels = state.config.review.zoom_levels;
+      setReviewZoom(levels[levels.indexOf(state.reviewZoomPercent) + direction]);
+    });
+  }
+  document.getElementById("zoom-fit").addEventListener("click", () => {
+    setReviewZoom(100);
+    resizeSourceImage({ reset: true });
+  });
 }

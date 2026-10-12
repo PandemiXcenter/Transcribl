@@ -213,8 +213,9 @@ Markdown.
   text with the latest contiguous revision history; it is not a second canonical
   machine dataset.
 - Review synchronization uses `original_page_number`. Preserve the distinction
-  between page identity and visual scroll position; the translated pane drives
-  the read-only original pane.
+  between page identity and visual scroll position; translated-pane scrolling
+  and explicit physical-page navigation select the read-only original page.
+  Scrolling or panning within a zoomed original image must not change that page.
 - Uncertainty replacement operates only on exact unresolved occurrences annotated
   by the model and aligned by the editorial service. “Translate All” is available
   only for more than one matching annotated occurrence. Never use unrestricted
@@ -367,9 +368,12 @@ library when adequate.
   authoritative glossary rows. Settings owns model/style and API-key handling.
   Articles owns the catalog, page-synchronized original/effective translation
   view, validation, uncertainty correction, reading, and reviewed exports.
-- Keep only the translated review pane user-scrollable. Use
-  `original_page_number` to drive the corresponding original page and preserve
-  keyboard/focus/accessibility behavior when rerendering edited blocks.
+- Keep document navigation in the translated review pane and explicit
+  Previous/Next/Page controls. Allow horizontal and vertical scrolling within the
+  single active original image when zoomed, with Fit restoring its full-page view.
+  Keep both panes within a bounded workspace. Use `original_page_number` to select
+  the source page and preserve keyboard/focus/accessibility behavior when
+  rerendering edited blocks.
 - Mount the complete translated document. Fetch and display only the active
   physical page image as the translated pane crosses page boundaries; do not
   eagerly load every source image.
@@ -380,6 +384,11 @@ library when adequate.
 - Delegate generated mapping-row and review-block input/click/keyboard/paste
   events from their stable containers. Do not attach listeners per rendered
   block, uncertainty, editor, or mapping row.
+- Retain text and metadata drafts through failed saves and rerenders. Clear only
+  successfully submitted values, preserving edits made during an in-flight save.
+  Show unsaved/saving/saved status, prevent duplicate review writes and warn before
+  abandoning unsaved article changes. Block uncertainty replacements affecting
+  sections with unsaved drafts.
 - Present `table_reconstruction` as machine-reconstructed table content, not as
   exact source transcription or reviewer-authored text. Preserve the append-only
   revision path for corrections. Emit every table at its canonical ordered block
@@ -394,9 +403,11 @@ library when adequate.
   section with owned notes from becoming a footnote until those notes are
   reassigned, and retain an explicit unknown-owner review state.
 - Keep exporter policy explicit. LaTeX, Markdown, plain text, and PDF use the latest
-  effective revision, regardless of review status; do not silently change them
+  saved effective revision, regardless of review status; do not silently change them
   to accepted-only behavior. Project each format from canonical data and the
   effective review view; never parse a compiled projection to recover structure.
+  Warn that unsaved drafts are excluded, wait for in-flight saves to finish, and
+  surface download failures in the workbench.
 - Treat the server as loopback-only. The bounded executor, upload aliases, and
   live running state are process-local; completed canonical runs and stopped
   failed manifests are rediscovered from disk by stable translation-run ID.
@@ -480,10 +491,12 @@ uv run pytest \
 ```
 
 NiceGUI and editorial component changes also require a local non-provider smoke check of tab navigation,
-form validation, translated-pane scroll synchronization, edit controls, and the
-conditional Translate All action. If the browser runtime is unavailable, state
-that visual/browser behavior was not verified rather than substituting a live
-provider call.
+form validation, translated-pane page synchronization, source zoom/scroll/Fit,
+explicit page navigation, draft retention and save feedback, edit controls,
+conditional Translate All, and reviewed download errors. The temporary offline
+fixture and checklist under `tests/browser/` support these checks. If the browser
+runtime is unavailable, state that visual/browser behavior was not verified
+rather than substituting a live provider call.
 
 Any future live test must use `@pytest.mark.live`, be skipped unless both an
 explicit opt-in flag and key exist, and be excluded from ordinary CI/development

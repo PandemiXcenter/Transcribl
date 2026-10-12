@@ -166,7 +166,7 @@ Deferred:
 
 Implemented:
 
-- plain tabbed Translate, Glossaries, Settings, and Articles workspace;
+- Translate, Glossaries and Articles tabs with a top-right Settings control;
 - laptop PDF selection and language direction on job start;
 - job progress polling;
 - failed-run discovery plus Continue/Cancel controls that preserve and revalidate
@@ -181,25 +181,33 @@ Implemented:
   browser or server restart;
 - the full translated document mounted for review, with translated-pane-driven
   synchronization that fetches and displays only the active original page PNG;
-- a TOML-defined original-page zoom selector whose amount persists across page
-  changes during validation;
+- a bounded review workspace with Previous/Next and direct physical-page
+  navigation, plus a TOML-defined original-page zoom selector and Fit control;
+- horizontal/vertical inspection of the active zoomed source image without
+  changing the document page; zoom persists across page changes, with visible
+  source-image loading, failure and retry states;
 - delegated generated-control events;
 - block editing and validation backed by append-only revisions;
+- text and metadata draft preservation across failed saves and rerenders,
+  retention of edits entered during an active save, a visible save state and
+  unsaved-change confirmation when leaving an article;
 - seamless cross-page paragraph groups with fixed page markers, one validation
   action, and fragment-scoped revision history;
 - visible provenance distinguishing machine translations (including reconstructed
   tables), reviewed-unchanged blocks, and manually edited revisions;
 - visible qualitative uncertainty details and conditional Translate One /
-  Translate All correction;
+  Translate All correction, guarded against replacing affected unsaved drafts;
 - TOML-backed Off/Low/Standard/High uncertainty selection plus optional per-job
   review-target instructions shared by page and table prompts;
 - an Uncertain terms list grouped and ordered by unresolved occurrence count,
   with page locations and first-occurrence navigation;
 - conditional Review/Read actions based on accepted-block progress;
 - export menus for reviewed XeLaTeX source, Markdown, plain text, and locally
-  typeset XeLaTeX PDF;
+  typeset XeLaTeX PDF, with saved-edit notices and inline download errors;
 - section-type correction and footnote owner/marker controls;
 - NiceGUI native desktop with focused controls and the complete editorial component;
+- an isolated offline browser fixture with two synthetic articles, readable
+  source images and a review regression checklist; it makes no provider calls;
 - GitHub Actions-only packaging for macOS ARM64 and Windows x64, with locked uv
   environments, architecture guards, bundled resources and provider-free packaged
   CLI/extraction/server smoke tests. The complete CLI remains available.

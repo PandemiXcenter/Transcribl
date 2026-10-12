@@ -28,8 +28,9 @@ import {
   uncertaintyNeedle
 } from "./highlights.js";
 import {
-  loadReview
+  renderReview
 } from "./review.js";
+import { beginReviewMutation, endReviewMutation } from "./mutations.js";
 
 export function relatedUncertainties(entry) {
   const termGroupId = asText(entry.uncertainty.term_group_id);
@@ -117,6 +118,7 @@ export function closeUncertainty() {
 }
 
 export async function replaceUncertainty(scope) {
+  if (state.reviewMutationPending) return;
   const entry = state.uncertaintyIndex.get(asText(state.activeUncertaintyId));
   if (!entry) {
     setInlineError(replacementError, "This uncertainty is no longer available.");
@@ -141,9 +143,13 @@ export async function replaceUncertainty(scope) {
   setInlineError(replacementError, "");
   const affectedEntries = scope === "all" ? relatedUncertainties(entry) : [entry];
   const drafts = captureDrafts();
-  for (const affected of affectedEntries) {
-    drafts.delete(asText(affected.block.block_id));
+  if (affectedEntries.some((affected) => drafts.has(asText(affected.block.block_id)))) {
+    setInlineError(replacementError,
+      "Save the unsaved edits in the affected sections before replacing this term.");
+    return;
   }
+  if (!beginReviewMutation()) return;
+  const jobId = state.jobId;
   const pageNumber = Number(entry.page.original_page_number);
   const anchorPage = renderedPageElement(translationContent, pageNumber);
   const anchorViewportOffset = anchorPage
@@ -153,8 +159,8 @@ export async function replaceUncertainty(scope) {
   translateOneButton.disabled = true;
   translateAllButton.disabled = true;
   try {
-    await apiRequest(
-      `/api/jobs/${encodeURIComponent(state.jobId)}/uncertainties/${encodeURIComponent(
+    const response = await apiRequest(
+      `/api/jobs/${encodeURIComponent(jobId)}/uncertainties/${encodeURIComponent(
         entry.uncertainty.uncertainty_id,
       )}/replace`,
       {
@@ -167,9 +173,14 @@ export async function replaceUncertainty(scope) {
         }),
       },
     );
+    if (state.jobId !== jobId) return;
+    if (!Array.isArray(response?.pages)) {
+      throw new Error("The server did not return the updated uncertainty review.");
+    }
+    const latestDrafts = captureDrafts();
     closeUncertainty();
-    await loadReview({
-      drafts,
+    state.review = { ...state.review, ...response };
+    renderReview(latestDrafts, {
       centerPageNumber: pageNumber,
       anchorPageNumber: pageNumber,
       anchorViewportOffset,
@@ -181,5 +192,6 @@ export async function replaceUncertainty(scope) {
   } finally {
     translateOneButton.disabled = false;
     translateAllButton.disabled = false;
+    endReviewMutation();
   }
 }

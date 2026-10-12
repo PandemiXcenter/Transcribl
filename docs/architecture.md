@@ -75,6 +75,9 @@ change persisted JSON schemas, prompt contracts or fingerprints.
   Translation, settings, credentials and glossaries own their controls/state.
   The Articles component uses native ES modules under `static/editor/` for
   API calls, rendering, drafts, revision commands, uncertainties and page sync.
+  `viewport.js` owns the bounded workspace and within-page image inspection;
+  `pages.js` owns physical-page navigation. `mutations.js` coordinates pending
+  review writes, and `downloads.js` reports export progress and failures.
   Its import graph is acyclic; listeners remain delegated from stable containers.
   `/editor-assets` serves checked-in package assets only, with no-store headers.
 
@@ -644,29 +647,48 @@ The NiceGUI desktop interface is a compact research workbench:
 - **Articles** first presents the filesystem-backed catalog of completed runs,
   editorial progress, a conditional Review/Read action, and the four-format
   export menu. Selecting one uses its stable translation-run ID, loads the complete strict
-  review projection, and mounts the full translated document. Only the translated
-  pane is user-scrollable. Its current `original_page_number` fetches and displays
-  that one physical page's original PNG; the browser does not mount every source
-  image. A TOML-defined original-page zoom selector retains its in-memory choice
-  across those page-image swaps without making the source pane independently
-  scrollable. The current page is persisted in the run-scoped position sidecar so a
+  review projection, and mounts the full translated document in a bounded
+  workspace. Translated-pane scrolling and Previous/Next/Page navigation select
+  the current `original_page_number` and fetch that physical page's original PNG;
+  the browser does not mount every source image. The original viewport allows
+  horizontal and vertical scrolling within that one image when zoomed. This
+  inspection never selects a different document page. Zoom choices remain
+  TOML-defined and persist across source-image swaps; Fit restores the full-page
+  scale, and loading/failure states provide a retry action for the active image.
+  The current page is persisted in the run-scoped position sidecar so a
   later session can continue there. Generated block, uncertainty, editor, and
   mapping controls use stable container-level delegated handlers rather than one
   listener per element. Each block distinguishes immutable machine translation
   from the latest append-only manual revision. Editing and validation append
-  revisions. Linked paragraph fragments form one visual editor and one validation
+  revisions. Draft snapshots contain text, effective type and footnote placement,
+  including metadata-only edits. Failed requests preserve these drafts; a
+  successful save clears only the submitted values, retaining changes entered
+  during the request. The toolbar reports unsaved/saving/saved state, pending
+  mutations prevent duplicate saves, and article changes warn before discarding
+  drafts. Linked paragraph fragments form one visual editor and one validation
   action, separated by immutable page markers; persistence and uncertainty offsets
   remain fragment-scoped. Structured uncertainties are
   highlighted and expose one/all replacement according to the service contract.
+  Replacement is blocked while an affected section has an unsaved draft, so an
+  uncertainty command cannot silently replace reviewer text or placement changes.
   The **Uncertain terms** control opens all unresolved groups in descending
   occurrence order and jumps to the first marked instance. Reviewers can change a
   translated section's effective type. A footnote additionally exposes its owner
   section and Unicode character offset for the inline marker; an unknown owner is
   an explicit review state. Reviewed XeLaTeX source, Markdown, plain text, and
-  locally typeset PDF are downloaded from the effective document view.
+  locally typeset PDF are downloaded from the effective document view. Downloads
+  include only saved revisions; unsaved drafts require an explicit decision to
+  export without them, and active saves must finish first. Export failures are
+  shown in the workbench instead of opening an opaque error response.
 
 The interface does not expose artifact paths, raw provider objects, or raw
 responses. It does not parse `document.md` to rebuild pages or blocks.
+
+`tests/browser/review_fixture.py` creates an isolated, temporary two-article
+workbench with a fake translator and real PDF extraction. Its readable images,
+linked paragraph, repeated uncertainties and emoji-prefixed footnote owner
+support the manual/CLI checklist in `tests/browser/README.md`. This fixture does
+not verify a live provider path or a packaged native application.
 
 ## Deliberate extension points
 

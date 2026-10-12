@@ -1,4 +1,4 @@
-<div id="global-alert" class="field-error" role="alert" hidden><span id="global-alert-message"></span><button id="dismiss-alert" type="button">Dismiss</button></div>      <section
+<div id="global-alert" class="global-alert" role="alert" tabindex="-1" hidden><span id="global-alert-message"></span><button id="dismiss-alert" type="button">Dismiss</button></div>      <section
         id="review-panel"
         class="tab-panel review-panel"
         
@@ -26,12 +26,11 @@
         <div id="review-editor" class="review-editor" hidden>
           <header class="review-toolbar">
             <div>
-              <h1 id="review-heading">Article</h1>
+              <h1 id="review-heading">Article review</h1>
               <p class="review-document" id="review-document"></p>
               <div id="review-cost"></div>
             </div>
             <div class="review-actions">
-              <span id="review-progress" class="review-progress"></span>
               <button
                 id="uncertainty-list-button"
                 class="secondary-button compact-control"
@@ -46,14 +45,11 @@
                 class="secondary-button compact-control"
                 type="button"
               >All articles</button>
-              <button
-                id="new-translation"
-                class="secondary-button compact-control"
-                type="button"
-              >New translation</button>
+
               <details class="export-menu toolbar-export-menu">
                 <summary class="secondary-button compact-control">Export</summary>
                 <div class="export-menu-options" aria-label="Export article">
+                  <p class="export-hint">Exports include saved edits.</p>
                   <a id="export-pdf-link" href="#" download>LaTeX PDF (.pdf)</a>
                   <a id="export-latex-link" href="#" download>LaTeX source (.tex)</a>
                   <a id="export-markdown-link" href="#" download>Markdown (.md)</a>
@@ -63,20 +59,28 @@
             </div>
           </header>
 
-          <div class="review-key" aria-label="Review legend">
-            <span><i class="legend-source" aria-hidden="true"></i> Page image</span>
-            <span><i class="legend-edited" aria-hidden="true"></i> Manual edit</span>
-            <span><i class="legend-uncertain" aria-hidden="true">?</i> Needs attention</span>
-            <span id="active-page-label">Physical page 1</span>
+          <div class="review-key">
+            <form id="review-page-form" class="page-navigation" aria-label="Page navigation">
+              <button id="previous-review-page" class="secondary-button compact-control" type="button" aria-label="Previous page">←</button>
+              <label for="review-page-number">Page</label>
+              <input id="review-page-number" class="page-number-input" type="number" min="1" value="1" required aria-label="Physical page number">
+              <span id="review-page-count"></span>
+              <button class="secondary-button compact-control" type="submit">Go</button>
+              <button id="next-review-page" class="secondary-button compact-control" type="button" aria-label="Next page">→</button>
+            </form>
+            <span id="review-progress" class="review-progress"></span>
+            <span id="review-save-status" role="status" aria-live="polite">All changes saved</span>
+            <span id="active-page-label" class="sr-only">Physical page 1</span>
           </div>
 
           <div class="review-grid">
             <section class="review-pane source-pane" aria-labelledby="source-heading">
               <header class="pane-heading">
-                <h2 id="source-heading">Original page</h2>
+                <div><h2 id="source-heading">Original page</h2><p id="source-page-label" class="page-label">Physical page 1</p></div>
                 <div class="source-pane-controls">
+                  <button id="zoom-out" class="secondary-button compact-control" type="button" aria-label="Zoom out">−</button>
                   <label for="review-zoom-select">
-                    Zoom
+                    <span class="sr-only">Zoom</span>
                     <select
                       id="review-zoom-select"
                       class="compact-select"
@@ -84,19 +88,26 @@
                       aria-label="Original page zoom"
                     ></select>
                   </label>
+                  <button id="zoom-in" class="secondary-button compact-control" type="button" aria-label="Zoom in">+</button>
+                  <button id="zoom-fit" class="secondary-button compact-control" type="button">Fit</button>
                   <a id="full-size-page-link" href="#" target="_blank" rel="noopener">
-                    Open full size
+                    Full size
                   </a>
                 </div>
               </header>
               <div
                 id="source-scroll"
                 class="document-scroll source-scroll"
-                aria-label="Original page image, synchronized with the translation"
+                tabindex="0"
+                role="region"
+                aria-label="Original page image. Scroll to inspect when zoomed."
                 aria-readonly="true"
               >
                 <div id="source-content" class="document-content source-image-content">
-                  <p id="source-page-label" class="page-label">Physical page 1</p>
+                  <div id="source-image-status" class="source-image-status" role="status" hidden>
+                    <p id="source-image-message"></p>
+                    <button id="retry-source-image" class="secondary-button compact-control" type="button" hidden>Retry image</button>
+                  </div>
                   <img
                     id="source-page-image"
                     class="source-page-image"
@@ -109,7 +120,7 @@
             <section class="review-pane translation-pane" aria-labelledby="translation-heading">
               <header class="pane-heading">
                 <h2 id="translation-heading">Translated text</h2>
-                <span>Scroll and edit here</span>
+                <span>Click text to edit</span>
               </header>
               <div
                 id="translation-scroll"

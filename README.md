@@ -176,22 +176,34 @@ host/port and use the same application services.
   under the configured artifact root. A stable translation-run ID reopens the
   same canonical artifacts after a browser or server restart. The complete
   translated document is mounted and scrollable; only the active physical
-  page's original PNG is fetched and displayed alongside it. The original-page
-  zoom control keeps its selected amount while the translated text moves through
-  subsequent pages. The last physical
-  page visited is stored per run, so the catalog can offer **Continue from page
-  X**. Edits create append-only revisions without changing machine output.
+  page's original PNG is fetched and displayed alongside it. Both panes remain
+  within the review workspace. Scroll the translated text or use **Previous
+  page**, **Next page**, or **Page / Go** to navigate physical pages. Enlarge the
+  original with the zoom controls, then scroll or pan within that one source
+  page; **Fit** restores the full-page view. Inspecting a zoomed image does not
+  change the active physical page. Zoom persists when translation navigation
+  selects another page. The last physical page visited is stored per run, so the
+  catalog can offer **Continue from page X**. Edits create append-only revisions
+  without changing machine output. Text, section-type and footnote-placement
+  drafts survive failed saves and rerenders. Text entered while a save is in
+  progress remains an unsaved draft after the submitted version is saved. The
+  toolbar shows whether edits are unsaved, saving, or saved; leaving an article
+  with unsaved edits requires confirmation.
   Uncertain terms are visibly marked and can be corrected once or, when multiple
   unresolved model-annotated occurrences exist, all at once. **Uncertain terms**
   opens a complete unresolved list ordered from most to least occurrences and
-  can jump to the first marked instance. Each translated section has an editable
-  type; footnotes additionally expose their stable identity, printed-reference
+  can jump to the first marked instance. Save or discard drafts in affected
+  sections before replacing their uncertain terms. Each translated section has an
+  editable type; footnotes additionally expose their stable identity, printed-reference
   evidence, appearance/handling description, owner-section selector, and exact
   inline marker character position. The owner editor renders that entrypoint as a
   display-only superscript which is excluded from saved editorial text. An
   unfinished article offers **Review**;
   a fully accepted article offers **Read**. The export menu downloads XeLaTeX
-  source, Markdown, plain text, or a PDF typeset locally with XeLaTeX. **Delete**
+  source, Markdown, plain text, or a PDF typeset locally with XeLaTeX. Exports
+  include saved edits; the interface warns if the open article has unsaved drafts,
+  asks you to wait for an active save to finish, and displays download failures in the
+  workbench. **Delete**
   removes the selected immutable translation run together with its revisions and
   review position; sibling runs for the same source document are preserved.
 
@@ -630,7 +642,13 @@ Normal tests never contact external providers. They generate synthetic PDFs in t
 directories, mock provider responses, and use fake providers for end-to-end
 execution. Interface tests use an in-process FastAPI client and fake job/provider
 boundaries. NiceGUI simulation tests also exercise desktop selections, credentials,
-and glossary submission through that API. A future live test must be explicitly marked `live`, require an
+and glossary submission through that API. For interactive review checks,
+`uv run python tests/browser/review_fixture.py` starts an isolated workbench with
+two synthetic articles, readable source images, linked paragraphs, uncertainties
+and a Unicode footnote anchor. Its temporary files are removed on normal shutdown.
+See [the browser checklist](tests/browser/README.md) for zoom, navigation, draft,
+replacement and download checks; `--check` validates the fixture without starting
+a server. A future live test must be explicitly marked `live`, require an
 opt-in flag as well as a key, and remain excluded from ordinary verification.
 
 Gemini failures retain only a safe HTTP code/status and operator guidance. Raw

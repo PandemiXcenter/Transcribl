@@ -17,10 +17,7 @@ body { background: #f4f5f5; color: #242c32; }
 .glossary-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; width: 100%; align-items: center; }
 .research-editor { --canvas: #f4f5f5; --accent: #365e70; --accent-dark: #234757; --line: #dce2e4; --surface-subtle: #f6f8f8; min-height: 0; background: transparent; width: 100%; }
 .research-editor .tab-panel { padding: 0; max-width: none; }
-.research-editor .review-grid { height: calc(100vh - 205px); min-height: 400px; }
 .research-editor .review-pane { border-radius: 6px; }
-.research-editor .document-scroll { height: 100%; }
 .research-editor .panel-header h1, .research-editor .review-toolbar h1 { font-size: 20px; }
-.research-editor .review-toolbar { margin-bottom: 12px; }
 .research-editor .review-list-card { border-radius: 6px; box-shadow: none; }
 @media (max-width: 850px) { .workbench-body {padding: 20px;} .workbench-grid {grid-template-columns: 1fr;} }

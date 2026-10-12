@@ -8,6 +8,7 @@ import {
   humanize,
   reviewStatusClass
 } from "./dom.js";
+import { effectiveDraft, draftsEqual } from "./drafts.js";
 import {
   renderHighlightedText,
   unresolvedUncertainties
@@ -44,7 +45,8 @@ export function updateBlockStatus(blockElement, block) {
   statusElement.className = `status ${reviewStatusClass(status)}`.trim();
 }
 
-export function makeTranslationBlock(block, page, draftText) {
+export function makeTranslationBlock(block, page, draft) {
+  const values = draft || effectiveDraft(block);
   const article = createElement("article", "translation-block");
   article.classList.add("page-sync-anchor");
   article.dataset.blockId = asText(block.block_id);
@@ -130,7 +132,7 @@ export function makeTranslationBlock(block, page, draftText) {
   for (const type of availableTypes) {
     const option = createElement("option", "", humanize(type));
     option.value = type;
-    option.selected = type === asText(block.type);
+    option.selected = type === values.type;
     typeSelect.append(option);
   }
   typeSelect.disabled = block.segment_handling !== "translate";
@@ -161,17 +163,17 @@ export function makeTranslationBlock(block, page, draftText) {
         `Page ${candidatePage.original_page_number} · ${humanize(candidate.type)} · ${preview}`,
       );
       option.value = asText(candidate.block_id);
-      option.selected = option.value === asText(block.footnote_owner_block_id);
+      option.selected = option.value === asText(values.footnoteOwner);
       ownerSelect.append(option);
     }
   }
   ownerLabel.append(ownerSelect);
-  ownerLabel.hidden = asText(block.type) !== "footnote";
-  const selectedOwnerEntry = state.blockIndex.get(asText(block.footnote_owner_block_id));
-  const selectedOwnerLength = asText(
+  ownerLabel.hidden = values.type !== "footnote";
+  const selectedOwnerEntry = state.blockIndex.get(asText(values.footnoteOwner));
+  const selectedOwnerLength = Array.from(asText(
     selectedOwnerEntry?.block?.effective_text,
     selectedOwnerEntry?.block?.machine_text,
-  ).length;
+  )).length;
   const anchorLabel = createElement(
     "label",
     "field-label compact-field footnote-anchor-field",
@@ -182,12 +184,12 @@ export function makeTranslationBlock(block, page, draftText) {
   anchorInput.min = "0";
   anchorInput.max = asText(selectedOwnerLength);
   anchorInput.step = "1";
-  anchorInput.value = asText(block.footnote_anchor_offset, selectedOwnerLength);
-  anchorInput.disabled = !block.footnote_owner_block_id;
+  anchorInput.value = asText(values.footnoteAnchor, selectedOwnerLength);
+  anchorInput.disabled = !values.footnoteOwner;
   anchorInput.dataset.testid = "footnote-anchor-input";
   anchorInput.dataset.action = "change-footnote-anchor";
   anchorLabel.append(anchorInput);
-  anchorLabel.hidden = asText(block.type) !== "footnote";
+  anchorLabel.hidden = values.type !== "footnote";
   sectionControls.append(typeLabel, ownerLabel, anchorLabel);
   sectionControls.append(
     createElement(
@@ -197,7 +199,7 @@ export function makeTranslationBlock(block, page, draftText) {
     ),
   );
   sectionControls.querySelector(".footnote-anchor-help").hidden =
-    asText(block.type) !== "footnote";
+    values.type !== "footnote";
 
   if (block.footnote_description) {
     const description = createElement("details", "footnote-description");
@@ -233,8 +235,7 @@ export function makeTranslationBlock(block, page, draftText) {
       block.manual_insertion_reason || block.type || "material",
     ).toLocaleLowerCase()} manually from the page image.`;
   }
-  const effectiveText = asText(block.effective_text, asText(block.machine_text));
-  const displayedText = draftText === undefined ? effectiveText : draftText;
+  const displayedText = values.text;
   const handled = renderHighlightedText(editor, displayedText, block);
 
   const fallbackContainer = createElement("div", "uncertainty-fallbacks");
@@ -298,7 +299,8 @@ export function makeTranslationBlock(block, page, draftText) {
     article.append(fallbackContainer);
   }
   article.append(actions);
-  if (displayedText !== effectiveText) {
+  if (!draftsEqual(values, effectiveDraft(block))) {
+    editor.classList.add("is-dirty");
     article.classList.add("is-dirty");
   }
   return article;

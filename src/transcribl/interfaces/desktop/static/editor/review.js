@@ -1,7 +1,4 @@
 import {
-  apiRequest
-} from "./api.js";
-import {
   makeTranslationBlock
 } from "./blocks.js";
 import {
@@ -20,7 +17,6 @@ import {
   uncertaintyListButton
 } from "./context.js";
 import {
-  activateTab,
   asText,
   createElement,
   elementPositionInScroller,
@@ -38,6 +34,7 @@ import {
   buildReviewIndexes
 } from "./indexes.js";
 import {
+  reviewPageAnchor,
   syncSourceToTranslation
 } from "./pages.js";
 import {
@@ -46,6 +43,11 @@ import {
 import {
   renderUncertaintyGroupList
 } from "./uncertainty_render.js";
+
+import { resizeReviewWorkspace } from "./viewport.js";
+import { notifyDraftsChanged, restoreEditorSelection } from "./drafts.js";
+
+let renderObserver = null;
 
 export function updateReviewSummary() {
   if (!state.review) {
@@ -80,6 +82,8 @@ export function updateReviewSummary() {
 }
 
 export function renderAllReviewPages(options = {}) {
+  const generation = ++state.renderGeneration;
+  renderObserver?.disconnect();
   if (state.scrollFrame !== null) {
     cancelAnimationFrame(state.scrollFrame);
     state.scrollFrame = null;
@@ -123,12 +127,26 @@ export function renderAllReviewPages(options = {}) {
     translationScroll.scrollTop = 0;
   }
 
-  requestAnimationFrame(() => {
+  const finishRender = () => {
+    if (generation !== state.renderGeneration) return;
+    if (!translationScroll.clientHeight) {
+      renderObserver = new ResizeObserver(() => {
+        if (translationScroll.clientHeight) {
+          renderObserver?.disconnect();
+          requestAnimationFrame(finishRender);
+        }
+      });
+      renderObserver.observe(translationScroll);
+      return;
+    }
+    resizeReviewWorkspace();
     const requestedPageNumber = Number(
       options.anchorPageNumber ?? options.resumePageNumber,
     );
     if (Number.isInteger(requestedPageNumber)) {
-      const anchorPage = renderedPageElement(translationContent, requestedPageNumber);
+      const anchorPage = Number.isFinite(options.anchorViewportOffset)
+        ? renderedPageElement(translationContent, requestedPageNumber)
+        : reviewPageAnchor(requestedPageNumber);
       if (anchorPage && Number.isFinite(options.anchorViewportOffset)) {
         const currentOffset =
           anchorPage.getBoundingClientRect().top -
@@ -148,12 +166,13 @@ export function renderAllReviewPages(options = {}) {
       );
       editor?.focus({ preventScroll: true });
     }
+    restoreEditorSelection(options.selection);
     requestAnimationFrame(() => {
-      state.allowPositionPersistence = true;
+      if (generation === state.renderGeneration) state.allowPositionPersistence = true;
     });
-  });
+  };
+  requestAnimationFrame(finishRender);
 }
-
 export function renderReview(drafts = new Map(), options = {}) {
   state.allowPositionPersistence = false;
   state.reviewDrafts = new Map(drafts);
@@ -178,9 +197,7 @@ export function renderReview(drafts = new Map(), options = {}) {
   reviewLibrary.hidden = true;
   reviewEditor.hidden = false;
   reviewDocument.textContent = filename;
-  if (state.review?.cost) {
-    document.getElementById("review-cost").replaceChildren(costBreakdown(state.review.cost));
-  }
+  document.getElementById("review-cost").replaceChildren(...(state.review?.cost ? [costBreakdown(state.review.cost)] : []));
   document.title = `${filename} · Transcribl`;
   configureExportLinks(state.jobId, {
     pdf: exportPdfLink,
@@ -189,6 +206,8 @@ export function renderReview(drafts = new Map(), options = {}) {
     txt: exportTextLink,
   });
   updateReviewSummary();
+  notifyDraftsChanged();
+  resizeReviewWorkspace();
   const focusedPage = options.focusBlockId
     ? state.blockIndex.get(asText(options.focusBlockId))?.page.original_page_number
     : null;
@@ -200,22 +219,4 @@ export function renderReview(drafts = new Map(), options = {}) {
       Number(state.review?.continue_page) ||
       state.reviewPages[0]?.original_page_number,
   });
-}
-
-export async function loadReview(options = {}) {
-  const review = await apiRequest(
-    `/api/jobs/${encodeURIComponent(state.jobId)}/review`,
-  );
-  state.review = review || { pages: [] };
-  state.sourcePageNumber = null;
-  state.lastPersistedPage = Number(state.review.continue_page) || null;
-  const hasAnchor = options.anchorPageNumber !== undefined;
-  renderReview(options.drafts instanceof Map ? options.drafts : new Map(), {
-    centerPageNumber: options.centerPageNumber,
-    anchorPageNumber: options.anchorPageNumber,
-    anchorViewportOffset: options.anchorViewportOffset,
-    focusBlockId: options.focusBlockId,
-    resetScroll: !hasAnchor,
-  });
-  activateTab("review");
 }

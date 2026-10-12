@@ -115,7 +115,7 @@ export function makeParagraphGroup(group) {
       `Paragraph fragment from physical page ${page.original_page_number}`,
     );
     const effectiveText = asText(block.effective_text, asText(block.machine_text));
-    const draftText = state.reviewDrafts.get(asText(block.block_id));
+    const draftText = state.reviewDrafts.get(asText(block.block_id))?.text;
     const displayedText = draftText === undefined ? effectiveText : draftText;
     const handled = renderHighlightedText(editor, displayedText, block);
     if (displayedText !== effectiveText) {

@@ -203,8 +203,7 @@ display: flex;
   gap: 0.55rem;
   align-items: center;
   margin-top: 0.45rem;
-  opacity: 0;
-  transition: opacity 120ms ease;
+  opacity: 1;
 }
 .research-editor .translation-block:hover .block-actions,
 .research-editor .translation-block:focus-within .block-actions,

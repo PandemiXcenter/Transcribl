@@ -2,6 +2,10 @@
 // One browser window's effective review state and mounted DOM references.
 export const state = {
   config: null,
+  reviewMutationPending: false,
+  reviewLoadGeneration: 0,
+  pendingOpenId: null,
+  renderGeneration: 0,
   jobId: null,
   job: null,
   review: null,
@@ -60,7 +64,6 @@ export const backToTranslationsButton = document.querySelector("#back-to-transla
 export const globalAlert = document.querySelector("#global-alert");
 export const globalAlertMessage = document.querySelector("#global-alert-message");
 export const dismissAlert = document.querySelector("#dismiss-alert");
-export const newTranslationButton = document.querySelector("#new-translation");
 export const EDITABLE_BLOCK_TYPES = [
   "title",
   "subtitle",

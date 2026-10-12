@@ -7,7 +7,6 @@ import {
   cancelUncertaintyButton,
   closeUncertaintyButton,
   dismissAlert,
-  newTranslationButton,
   refreshTranslationsButton,
   reviewEditor,
   reviewList,
@@ -24,7 +23,6 @@ import {
   uncertaintyListButton
 } from "./context.js";
 import {
-  activateTab,
   clearGlobalError,
   showGlobalError
 } from "./dom.js";
@@ -42,6 +40,7 @@ import {
   openLibraryReview
 } from "./library.js";
 import {
+  initializePageNavigation,
   requestScrollSync,
   setReviewZoom
 } from "./pages.js";
@@ -53,6 +52,16 @@ import {
   handleUncertaintyGroupClick,
   openUncertaintyList
 } from "./uncertainty_list.js";
+
+import { initializeSourceViewport } from "./viewport.js";
+import { initializeDownloads } from "./downloads.js";
+
+function updateSaveStatus() {
+  const label = document.getElementById("review-save-status");
+  const count = state.reviewDrafts.size;
+  label.textContent = state.reviewMutationPending ? "Saving…" : count ? `${count} unsaved ${count === 1 ? "section" : "sections"}` : "All changes saved";
+  label.classList.toggle("has-drafts", count > 0);
+}
 
 export async function initializeEditor() {
   translationContent.addEventListener('click', handleReviewClick);
@@ -66,13 +75,11 @@ export async function initializeEditor() {
   dismissAlert.addEventListener('click', clearGlobalError);
   reviewList.addEventListener('click', handleReviewListClick);
   refreshTranslationsButton.addEventListener('click', () => loadTranslationLibrary({activate: true}));
-  backToTranslationsButton.addEventListener('click', () => {
-    if (state.reviewDrafts.size && !window.confirm('Discard unsaved block edits?')) return;
-    state.reviewDrafts = new Map();
-    window.history.replaceState({}, '', '/');
-    loadTranslationLibrary({activate: true});
-  });
-  newTranslationButton.addEventListener('click', () => activateTab('translate'));
+  backToTranslationsButton.addEventListener('click', () => loadTranslationLibrary({activate: true}));
+  document.addEventListener("transcribl-drafts-changed", updateSaveStatus);
+  initializeSourceViewport();
+  initializePageNavigation();
+  initializeDownloads();
   closeUncertaintyButton.addEventListener('click', closeUncertainty);
   cancelUncertaintyButton.addEventListener('click', closeUncertainty);
   uncertaintyListButton.addEventListener('click', openUncertaintyList);
@@ -82,7 +89,7 @@ export async function initializeEditor() {
   uncertaintyForm.addEventListener('submit', (event) => {event.preventDefault(); replaceUncertainty('one');});
   uncertaintyDialog.addEventListener('cancel', () => {state.activeUncertaintyId = null;});
   window.addEventListener('beforeunload', (event) => {
-    if (state.reviewDrafts.size || window.transcriblGlossaryDirty) {event.preventDefault(); event.returnValue = '';}
+    if (state.reviewMutationPending || state.reviewDrafts.size || window.transcriblGlossaryDirty) {event.preventDefault(); event.returnValue = '';}
   });
   window.transcriblEditor = {
     open: openLibraryReview,
@@ -91,7 +98,10 @@ export async function initializeEditor() {
       await loadTranslationLibrary();
       if (state.review && state.jobId && !reviewEditor.hidden) {
         try {
-          const job = await apiRequest(`/api/jobs/${encodeURIComponent(state.jobId)}`);
+          const jobId = state.jobId;
+          const generation = state.reviewLoadGeneration;
+          const job = await apiRequest(`/api/jobs/${encodeURIComponent(jobId)}`);
+          if (generation !== state.reviewLoadGeneration || jobId !== state.jobId || !state.review) return;
           state.review.cost = job.cost;
           document.getElementById("review-cost").replaceChildren(...(job.cost ? [costBreakdown(job.cost)] : []));
         } catch (error) {
@@ -104,6 +114,7 @@ export async function initializeEditor() {
       state.config = await apiRequest('/api/config');
       for (const level of state.config.review.zoom_levels) reviewZoomSelect.append(new Option(`${level}%`, String(level)));
       setReviewZoom(state.config.review.zoom_default_percent);
+      document.getElementById("zoom-fit").hidden = !state.config.review.zoom_levels.includes(100);
       await loadTranslationLibrary();
     },
   };

@@ -21,8 +21,12 @@ import {
   makeExportMenu
 } from "./exports.js";
 import {
-  loadReview
+  renderReview
 } from "./review.js";
+
+import { captureDrafts, notifyDraftsChanged } from "./drafts.js";
+
+let libraryGeneration = 0;
 
 export function formatReviewDate(value) {
   const date = new Date(asText(value));
@@ -95,37 +99,77 @@ export function renderTranslationLibrary(payload) {
   }
 }
 
-export async function loadTranslationLibrary({ activate = false } = {}) {
-  try {
-    renderTranslationLibrary(await apiRequest("/api/jobs"));
-  } catch (error) {
-    renderTranslationLibrary([]);
-    showGlobalError(error.message);
+export function canLeaveReview() {
+  if (state.reviewMutationPending) {
+    showGlobalError("Wait for the current save to finish.");
+    return false;
   }
+  if (state.review && captureDrafts().size && !window.confirm("Discard unsaved review changes?")) return false;
+  return true;
+}
+
+export async function loadTranslationLibrary({ activate = false } = {}) {
   if (activate) {
+    if (!canLeaveReview()) return;
+    state.reviewLoadGeneration += 1;
+    state.pendingOpenId = null;
+    reviewEditor.inert = false;
+    state.renderGeneration += 1;
+    state.allowPositionPersistence = false;
+    state.reviewDrafts = new Map();
+    state.review = null;
+    state.jobId = null;
+    notifyDraftsChanged();
     reviewEditor.hidden = true;
     reviewLibrary.hidden = false;
     reviewDocument.textContent = "";
+    document.title = "Articles · Transcribl";
+    window.history.replaceState({}, "", "/");
     activateTab("review");
+  }
+  const generation = ++libraryGeneration;
+  reviewList.setAttribute("aria-busy", "true");
+  try {
+    const payload = await apiRequest("/api/jobs");
+    if (generation === libraryGeneration) renderTranslationLibrary(payload);
+  } catch (error) {
+    if (generation === libraryGeneration) showGlobalError(error.message);
+  } finally {
+    if (generation === libraryGeneration) reviewList.setAttribute("aria-busy", "false");
   }
 }
 
 export async function openLibraryReview(jobId, button) {
+  if (!canLeaveReview()) return;
   clearGlobalError();
-  if (button) {
-    button.disabled = true;
-  }
+  const generation = ++state.reviewLoadGeneration;
+  state.pendingOpenId = jobId;
+  reviewEditor.inert = true;
+  document.getElementById("review-save-status").textContent = "Opening article…";
+  if (button) button.disabled = true;
+  reviewLibrary.setAttribute("aria-busy", "true");
   try {
+    const [job, review] = await Promise.all([
+      apiRequest(`/api/jobs/${encodeURIComponent(jobId)}`),
+      apiRequest(`/api/jobs/${encodeURIComponent(jobId)}/review`),
+    ]);
+    if (generation !== state.reviewLoadGeneration) return;
     state.jobId = jobId;
-    state.job = await apiRequest(`/api/jobs/${encodeURIComponent(jobId)}`);
-    state.lastPersistedPage = null;
-    window.history.replaceState({}, "", `/?job=${encodeURIComponent(jobId)}`);
-    await loadReview();
+    state.job = job;
+    state.review = review;
+    state.sourcePageNumber = null;
+    state.lastPersistedPage = Number(review.continue_page) || null;
+    activateTab("review");
+    renderReview(new Map(), { resetScroll: true });
   } catch (error) {
-    showGlobalError(error.message);
+    if (generation === state.reviewLoadGeneration) showGlobalError(error.message);
   } finally {
-    if (button) {
-      button.disabled = false;
+    if (button) button.disabled = false;
+    if (generation === state.reviewLoadGeneration) {
+      state.pendingOpenId = null;
+      reviewEditor.inert = false;
+      notifyDraftsChanged();
+      reviewLibrary.setAttribute("aria-busy", "false");
     }
   }
 }
@@ -153,6 +197,13 @@ export async function deleteLibraryReview(button) {
   }
   clearGlobalError();
   button.disabled = true;
+  if (state.pendingOpenId === jobId) {
+    state.reviewLoadGeneration += 1;
+    state.pendingOpenId = null;
+    reviewEditor.inert = false;
+    reviewLibrary.setAttribute("aria-busy", "false");
+    notifyDraftsChanged();
+  }
   try {
     await apiRequest(`/api/jobs/${encodeURIComponent(jobId)}`, { method: "DELETE" });
     await loadTranslationLibrary();

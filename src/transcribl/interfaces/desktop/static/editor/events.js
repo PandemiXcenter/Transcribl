@@ -7,7 +7,8 @@ import {
 } from "./dom.js";
 import {
   insertPlainTextAtSelection,
-  recordEditorDraft
+  recordEditorDraft,
+  recordBlockDraft
 } from "./drafts.js";
 import {
   activateSourcePageNumber,
@@ -95,6 +96,9 @@ export function handleReviewInput(event) {
   const editor = target?.closest(".translated-editor");
   if (editor && translationContent.contains(editor)) {
     recordEditorDraft(editor);
+  } else if (target instanceof HTMLInputElement && translationContent.contains(target)) {
+    const blockElement = target.closest(".translation-block");
+    if (blockElement) recordBlockDraft(blockElement);
   }
 }
 
@@ -128,16 +132,16 @@ export function handleReviewControlChange(event) {
     const anchorInput = blockElement.querySelector(".footnote-anchor-input");
     const ownerEntry = state.blockIndex.get(control.value);
     if (anchorInput instanceof HTMLInputElement) {
-      const ownerLength = asText(
+      const ownerLength = Array.from(asText(
         ownerEntry?.block?.effective_text,
         ownerEntry?.block?.machine_text,
-      ).length;
+      )).length;
       anchorInput.max = asText(ownerLength);
       anchorInput.value = control.value ? asText(ownerLength) : "0";
       anchorInput.disabled = !control.value;
     }
   }
-  blockElement.classList.add("is-dirty");
+  recordBlockDraft(blockElement);
 }
 
 export function handleReviewPaste(event) {
