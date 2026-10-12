@@ -209,7 +209,7 @@ def test_index_and_public_config_never_expose_secret(tmp_path: Path) -> None:
         "standard",
         "high",
     ]
-    assert payload["provider"]["model"] == "gemini-3.6-flash"
+    assert payload["provider"]["model"] == "gemini-3.8-flash"
     assert payload["extraction"]["image_dpi"] == 150
     assert payload["automation"] == {
         "auto_continue_default": False,
@@ -848,3 +848,50 @@ def test_unknown_job_does_not_create_artifact_directory(tmp_path: Path) -> None:
 
     assert response.status_code == 404
     assert not config.paths.artifacts_dir.exists()
+
+
+@pytest.mark.parametrize(
+    "provider,model", [("openai", "gpt-6-astra"), ("anthropic", "claude-opus-5-5")]
+)
+def test_new_provider_job_and_saved_key_are_isolated(
+    tmp_path: Path, provider: str, model: str
+) -> None:
+    config = configured_for_tmp(tmp_path)
+    manager = RecordingJobManager()
+    store = DotenvSecretStore(tmp_path / ".env")
+    app = create_app(config, job_manager=cast(WebJobManager, manager), secret_store=store)
+    with TestClient(app) as client:
+        client.get("/")
+        headers = {"X-CSRF-Token": client.cookies["at_csrf"]}
+        command = {"provider": provider, "api_key": "private-test-key", "save_on_computer": True}
+        assert client.post("/api/settings/api-key", json=command).status_code == 403
+        saved = client.post("/api/settings/api-key", json=command, headers=headers)
+        assert saved.status_code == 200 and saved.json()["saved_on_computer"]
+        public = client.get("/api/config")
+        assert "private-test-key" not in public.text
+        assert public.json()["api_keys"][provider]["saved_on_computer"]
+        assert not public.json()["api_keys"]["gemini"]["saved_on_computer"]
+        settings = {
+            "model": model,
+            "source_language": "Old Danish",
+            "target_language": "English",
+            "style": "balanced",
+            "previous_page_context_count": 2,
+            "image_dpi": 150,
+            "auto_continue": False,
+        }
+        response = client.post(
+            "/api/jobs",
+            headers=headers,
+            files={"pdf": ("test.pdf", b"%PDF-1.7", "application/pdf")},
+            data={"settings": json.dumps(settings), "api_key": "session-test-key"},
+        )
+        assert response.status_code == 202
+        runtime = manager.submissions[-1][4]
+        assert runtime.provider.name == provider and runtime.provider.selected.model == model
+        assert runtime.translation.source_language == "Old Danish"
+        assert "session-test-key" not in response.text
+        invalid = client.delete("/api/settings/api-key?provider=unknown", headers=headers)
+        assert invalid.status_code == 422
+        cleared = client.delete(f"/api/settings/api-key?provider={provider}", headers=headers)
+        assert not cleared.json()["saved_on_computer"]

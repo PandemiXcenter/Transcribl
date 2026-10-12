@@ -6,10 +6,13 @@ from threading import RLock
 
 from pydantic import SecretStr
 
-_GEMINI_API_KEY = "GEMINI_API_KEY"
-_ASSIGNMENT_PATTERN = re.compile(
-    rf"^[ \t]*(?:export[ \t]+)?{_GEMINI_API_KEY}[ \t]*=(?P<value>.*)\Z"
-)
+from transcribl.config import ProviderName
+
+_KEY_NAMES = {
+    "gemini": "GEMINI_API_KEY",
+    "openai": "OPENAI_API_KEY",
+    "anthropic": "ANTHROPIC_API_KEY",
+}
 _UNQUOTED_COMMENT_PATTERN = re.compile(r"\s+#.*")
 _FORBIDDEN_VALUE_CHARACTERS = frozenset({"\r", "\n", "\0"})
 
@@ -19,7 +22,7 @@ class InvalidSecretValueError(ValueError):
 
 
 class DotenvSecretStore:
-    """Persist only the Gemini API key in a local dotenv file.
+    """Persist Gemini in .env and other supported keys in a separate local cache.
 
     The store intentionally exposes only boolean status and write operations. It
     never returns the persisted key.
@@ -29,33 +32,49 @@ class DotenvSecretStore:
         self._path = path
         self._lock = RLock()
 
+    @property
+    def path(self) -> Path:
+        return self._path
+
+    def path_for(self, provider: ProviderName) -> Path:
+        return self._path if provider == "gemini" else self._path.with_name(".provider-keys")
+
     def has_gemini_api_key(self) -> bool:
+        return self.has_api_key("gemini")
+
+    def save_gemini_api_key(self, value: SecretStr | str) -> None:
+        self.save_api_key("gemini", value)
+
+    def clear_gemini_api_key(self) -> bool:
+        return self.clear_api_key("gemini")
+
+    def has_api_key(self, provider: ProviderName) -> bool:
         """Report whether the effective saved definition has a nonblank value."""
 
         with self._lock:
-            lines = self._read_lines()
+            lines = self._read_lines(provider)
             last_value: str | None = None
             found = False
             for line in lines:
-                match = _match_assignment(line)
+                match = _match_assignment(line, provider)
                 if match is not None:
                     found = True
                     last_value = match.group("value")
             return found and last_value is not None and _is_nonblank_dotenv_value(last_value)
 
-    def save_gemini_api_key(self, value: SecretStr | str) -> None:
+    def save_api_key(self, provider: ProviderName, value: SecretStr | str) -> None:
         """Atomically save the key without retaining or returning its plaintext."""
 
         plaintext = value.get_secret_value() if isinstance(value, SecretStr) else value
         _validate_secret_value(plaintext)
-        replacement = f"{_GEMINI_API_KEY}={_quote_dotenv_value(plaintext)}"
+        replacement = f"{_KEY_NAMES[provider]}={_quote_dotenv_value(plaintext)}"
 
         with self._lock:
-            lines = self._read_lines()
+            lines = self._read_lines(provider)
             updated_lines: list[str] = []
             replaced = False
             for line in lines:
-                match = _match_assignment(line)
+                match = _match_assignment(line, provider)
                 if match is None:
                     updated_lines.append(line)
                 elif not replaced:
@@ -68,38 +87,39 @@ class DotenvSecretStore:
                     updated_lines[-1] += newline
                 updated_lines.append(replacement + newline)
 
-            self._atomic_write("".join(updated_lines))
+            self._atomic_write("".join(updated_lines), provider)
 
-    def clear_gemini_api_key(self) -> bool:
-        """Remove every Gemini key definition, returning whether one was present."""
+    def clear_api_key(self, provider: ProviderName) -> bool:
+        """Remove every selected provider key definition, returning whether one was present."""
 
         with self._lock:
-            if not self._path.is_file():
+            if not self.path_for(provider).is_file():
                 return False
 
-            lines = self._read_lines()
-            updated_lines = [line for line in lines if _match_assignment(line) is None]
+            lines = self._read_lines(provider)
+            updated_lines = [line for line in lines if _match_assignment(line, provider) is None]
             if len(updated_lines) == len(lines):
                 return False
 
-            self._atomic_write("".join(updated_lines))
+            self._atomic_write("".join(updated_lines), provider)
             return True
 
-    def _read_lines(self) -> list[str]:
-        if not self._path.is_file():
+    def _read_lines(self, provider: ProviderName) -> list[str]:
+        if not self.path_for(provider).is_file():
             return []
-        return self._path.read_bytes().decode("utf-8").splitlines(keepends=True)
+        return self.path_for(provider).read_bytes().decode("utf-8").splitlines(keepends=True)
 
-    def _atomic_write(self, content: str) -> None:
-        self._path.parent.mkdir(parents=True, exist_ok=True)
+    def _atomic_write(self, content: str, provider: ProviderName) -> None:
+        path = self.path_for(provider)
+        path.parent.mkdir(parents=True, exist_ok=True)
         temporary_path: Path | None = None
         try:
             with NamedTemporaryFile(
                 mode="w",
                 encoding="utf-8",
                 newline="",
-                dir=self._path.parent,
-                prefix=f".{self._path.name}.",
+                dir=path.parent,
+                prefix=f".{path.name}.",
                 suffix=".tmp",
                 delete=False,
             ) as temporary:
@@ -109,15 +129,15 @@ class DotenvSecretStore:
                     os.fchmod(temporary.fileno(), 0o600)
                 os.fsync(temporary.fileno())
                 temporary_path = Path(temporary.name)
-            os.replace(temporary_path, self._path)
+            os.replace(temporary_path, path)
         finally:
             if temporary_path is not None:
                 temporary_path.unlink(missing_ok=True)
 
 
-def _match_assignment(line: str) -> re.Match[str] | None:
+def _match_assignment(line: str, provider: ProviderName) -> re.Match[str] | None:
     body = line.removesuffix(_line_ending(line))
-    return _ASSIGNMENT_PATTERN.fullmatch(body)
+    return re.fullmatch(rf"[ \t]*(?:export[ \t]+)?{_KEY_NAMES[provider]}[ \t]*=(?P<value>.*)", body)
 
 
 def _line_ending(line: str) -> str:
@@ -136,11 +156,9 @@ def _preferred_newline(lines: list[str]) -> str:
 
 def _validate_secret_value(value: str) -> None:
     if not value.strip():
-        raise InvalidSecretValueError("Gemini API key must not be blank")
+        raise InvalidSecretValueError("API key must not be blank")
     if any(character in value for character in _FORBIDDEN_VALUE_CHARACTERS):
-        raise InvalidSecretValueError(
-            "Gemini API key must not contain line breaks or NUL characters"
-        )
+        raise InvalidSecretValueError("API key must not contain line breaks or NUL characters")
 
 
 def _quote_dotenv_value(value: str) -> str:

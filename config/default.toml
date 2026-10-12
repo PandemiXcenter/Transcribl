@@ -14,9 +14,10 @@ name = "gemini"
 
 [provider.gemini]
 # A stable multimodal model with structured-output support. Change without code.
-model = "gemini-3.6-flash"
+model = "gemini-3.8-flash"
 # Models colleagues may choose in the local Settings tab.
 selectable_models = [
+    "gemini-3.8-flash",
     "gemini-3.6-flash",
     "gemini-3.5-flash",
     "gemini-3.5-flash-lite",
@@ -26,6 +27,22 @@ request_timeout_seconds = 120
 request_attempts = 3
 # Conservative encoded request ceiling below Gemini's 20 MB inline-image limit.
 max_inline_request_bytes = 19000000
+
+[provider.openai]
+model = "gpt-6-astra"
+selectable_models = ["gpt-6-astra"]
+request_timeout_seconds = 180
+request_attempts = 3
+max_inline_request_bytes = 19000000
+max_output_tokens = 32768
+
+[provider.anthropic]
+model = "claude-opus-5-5"
+selectable_models = ["claude-opus-5-5"]
+request_timeout_seconds = 180
+request_attempts = 3
+max_inline_request_bytes = 19000000
+max_output_tokens = 32768
 
 [translation]
 source_language = "Danish"
@@ -61,6 +78,8 @@ latex_engine = "xelatex"
 compile_timeout_seconds = 120
 
 [web]
+# Custom is appended by the UI, including for defaults absent from this list.
+language_choices = ["Danish", "English", "Norwegian", "Swedish", "German", "French", "Spanish", "Italian", "Portuguese", "Dutch", "Finnish", "Icelandic", "Latin", "Greek", "Polish", "Ukrainian", "Russian", "Arabic", "Hebrew", "Hindi", "Chinese", "Japanese", "Korean"]
 # The editor is intentionally local-only until authentication is added.
 host = "127.0.0.1"
 port = 8000

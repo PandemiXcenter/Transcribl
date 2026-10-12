@@ -115,3 +115,7 @@ After each native build, verify at minimum:
 Unsigned executables may trigger operating-system trust warnings when shared.
 Signing and notarization are release/distribution concerns and are intentionally
 separate from this reproducible local build command.
+
+OpenAI and Anthropic SDKs are runtime dependencies. Their saved keys live in the
+ignored `.provider-keys` cache beside the runtime `.env`, including in the native
+per-user application-data directory. Neither credential file is bundled.

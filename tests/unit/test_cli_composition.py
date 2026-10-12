@@ -295,3 +295,44 @@ def test_browser_launch_failure_does_not_escape(capsys: pytest.CaptureFixture[st
     )
 
     assert "Open http://127.0.0.1:8000 manually" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "provider,adapter_name",
+    [("openai", "OpenAIPageTranslator"), ("anthropic", "AnthropicPageTranslator")],
+)
+def test_new_provider_composition_loads_only_its_saved_cache_key(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    provider: str,
+    adapter_name: str,
+) -> None:
+    from transcribl.adapters.secrets import DotenvSecretStore
+    from transcribl.config import StructuredProviderConfig
+
+    for variable in ("GEMINI_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY"):
+        monkeypatch.delenv(variable, raising=False)
+    store = DotenvSecretStore(tmp_path / ".env")
+    for name in ("gemini", "openai", "anthropic"):
+        store.save_api_key(name, f"test-{name}")
+    observed: dict[str, object] = {}
+
+    class Adapter:
+        def __init__(self, *, api_key: str, config: StructuredProviderConfig) -> None:
+            observed.update(key=api_key, config=config)
+
+        def __enter__(self) -> Self:
+            return self
+
+        def __exit__(self, *_: object) -> None:
+            observed["closed"] = True
+
+    monkeypatch.setattr(composition, adapter_name, Adapter)
+    config = load_project_config(Path("config/default.toml"))
+    config = config.model_copy(
+        update={"provider": config.provider.model_copy(update={"name": provider})}
+    )
+    with composition.provider_translator(config, secret_path=store.path):
+        assert observed["key"] == f"test-{provider}"
+        assert observed["config"] == config.provider.selected
+    assert observed["closed"] is True

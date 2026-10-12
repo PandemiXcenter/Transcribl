@@ -14,7 +14,7 @@ Implemented:
 - API-key-only `.env`;
 - versioned Pydantic machine and provider payloads;
 - page-preserving MarkItDown extraction and matching PNG rendering;
-- structured Gemini image+Markdown adapter;
+- structured Gemini, OpenAI Responses, and Anthropic Messages image+Markdown adapters;
 - conditional structured table-reconstruction adapter using the same page image
   and complete MarkItDown/OCR;
 - qualitative uncertain-term output;
@@ -27,13 +27,13 @@ Implemented:
 
 Still required before production claims:
 
-- verify live Gemini behavior only through an explicit, opt-in live exercise;
+- verify live Gemini, OpenAI, and Anthropic behavior only through an explicit, opt-in live exercise;
 - evaluate representative born-digital and scanned historical PDFs;
 - improve provider error classification and privacy-safe telemetry;
 - test very large, malformed, rotated, and password-protected PDFs;
 - decide retention/deletion policy for preparations, images, and completed runs.
 
-The ordinary suite has not contacted Gemini, so live translation quality and
+The ordinary suite has not contacted any provider, so live translation quality and
 provider-account behavior remain unverified.
 
 ## Phase 2 — translation quality controls
@@ -70,7 +70,7 @@ Implemented:
   translations (default 2), shared by primary and table prompts and constrained
   to current-page-only output;
 - configured glossary plus an authoritative per-job Term mappings table;
-- per-job input/output languages, style, and allowlisted Gemini model, with TOML
+- per-job input/output languages, style, and allowlisted provider model, with TOML
   defaults (Danish to English in the checked-in config);
 - distinct main/table prompt versions, hashes, provenance, and checkpoint
   invalidation for translation-affecting settings and context.
@@ -158,7 +158,7 @@ Implemented:
 - a TOML-defaulted per-job Auto continue switch with a bounded retry count and
   persisted operational provenance;
 - authoritative source-term/required-translation rows;
-- allowlisted Gemini model, translation style, and key controls;
+- allowlisted provider model, translation style, and key controls;
 - side-by-side original/effective translation blocks grouped by
   `original_page_number`;
 - an always-available completed-run catalog with **Continue from page X** after a

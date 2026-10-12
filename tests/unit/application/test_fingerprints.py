@@ -158,3 +158,54 @@ def test_table_fingerprint_includes_prompt_first_pass_and_target_metadata() -> N
     )
 
     assert len({base, changed_prompt, changed_target}) == 3
+
+
+@pytest.mark.parametrize("provider", ["openai", "anthropic"])
+def test_new_provider_semantics_invalidate_both_passes_but_transport_does_not(
+    provider: str,
+) -> None:
+    from pathlib import Path
+
+    from transcribl.adapters.llm.structured import AnthropicPageTranslator, OpenAIPageTranslator
+    from transcribl.config import load_project_config
+
+    config = load_project_config(Path("config/default.toml"))
+    settings = config.provider.openai if provider == "openai" else config.provider.anthropic
+    cls = OpenAIPageTranslator if provider == "openai" else AnthropicPageTranslator
+    descriptors = [
+        cls(api_key="unused", config=current, client=object()).descriptor
+        for current in (
+            settings,
+            settings.model_copy(
+                update={
+                    "request_timeout_seconds": 900,
+                    "request_attempts": 1,
+                    "max_inline_request_bytes": 1_000_000,
+                }
+            ),
+            settings.model_copy(update={"max_output_tokens": 4096}),
+            settings.model_copy(update={"model": "other-model"}),
+        )
+    ]
+    for table in (False, True):
+        hashes = []
+        for descriptor in descriptors:
+            hashes.append(
+                fingerprints.table_input_fingerprint(
+                    page=_page(),
+                    settings=TranslationSettings(),
+                    provider=descriptor,
+                    prompt="prompt",
+                    first_pass_fingerprint=HASH,
+                    table_blocks=[_table(SegmentContinuation.COMPLETE)],
+                )
+                if table
+                else fingerprints.page_input_fingerprint(
+                    page=_page(),
+                    settings=TranslationSettings(),
+                    provider=descriptor,
+                    prompt="prompt",
+                )
+            )
+        assert hashes[0] == hashes[1]
+        assert len({hashes[0], hashes[2], hashes[3]}) == 3

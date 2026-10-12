@@ -187,11 +187,12 @@ class StopOnceTranslator(RecordingTranslator):
         self.fail_once_on = fail_once_on
         self.calls: list[int] = []
         self.api_version = "v1beta"
+        self.provider = "gemini"
 
     @property
     def descriptor(self) -> ProviderDescriptor:
         return ProviderDescriptor(
-            provider="gemini",
+            provider=self.provider,
             model=self.model,
             semantic_configuration={"api_version": self.api_version},
         )
@@ -242,14 +243,20 @@ def _wait_for_status(
     raise AssertionError(f"Job {job_id} did not reach {expected}")
 
 
+@pytest.mark.parametrize("provider", ["gemini", "openai", "anthropic"])
 def test_failed_web_job_survives_restart_and_continues_same_run(
     tmp_path: Path,
+    provider: str,
 ) -> None:
     config = load_project_config(Path("config/default.toml"))
     config = config.model_copy(
         update={"paths": config.paths.model_copy(update={"artifacts_dir": tmp_path / "artifacts"})}
     )
+    config = config.model_copy(
+        update={"provider": config.provider.model_copy(update={"name": provider})}
+    )
     translator = StopOnceTranslator(fail_once_on=2)
+    translator.provider = provider
 
     @contextmanager
     def translator_context(
@@ -257,7 +264,8 @@ def test_failed_web_job_survives_restart_and_continues_same_run(
         api_key: SecretStr | None,
     ) -> Iterator[PageTranslator]:
         assert api_key is None
-        translator.model = runtime_config.provider.gemini.model
+        assert runtime_config.provider.name == provider
+        translator.model = runtime_config.provider.selected.model
         translator.api_version = runtime_config.provider.gemini.api_version
         yield translator
 
@@ -305,6 +313,7 @@ def test_failed_web_job_survives_restart_and_continues_same_run(
     recoverable = restarted.list_recoverable_jobs()
     assert [snapshot.job_id for snapshot in recoverable] == [run_id]
     assert recoverable[0].current_page == 2
+    assert recoverable[0].provider == provider
     cancelled = restarted.cancel_job(run_id)
     assert cancelled.status is WebJobStatus.CANCELLED
     assert checkpoint.is_file()

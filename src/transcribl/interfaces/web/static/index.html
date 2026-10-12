@@ -109,24 +109,18 @@
             <div class="language-grid">
               <label class="field-label" for="source-language">
                 Input language
-                <input
-                  id="source-language"
-                  data-testid="source-language"
-                  type="text"
-                  autocomplete="off"
-                  required
-                >
+                <select id="source-language" data-testid="source-language" required></select>
+                <input id="source-language-custom" type="text" maxlength="100"
+                  aria-label="Custom input language"
+                  placeholder="Enter language" autocomplete="off" hidden disabled>
               </label>
               <span class="language-arrow" aria-hidden="true">→</span>
               <label class="field-label" for="target-language">
                 Output language
-                <input
-                  id="target-language"
-                  data-testid="target-language"
-                  type="text"
-                  autocomplete="off"
-                  required
-                >
+                <select id="target-language" data-testid="target-language" required></select>
+                <input id="target-language-custom" type="text" maxlength="100"
+                  aria-label="Custom output language"
+                  placeholder="Enter language" autocomplete="off" hidden disabled>
               </label>
             </div>
             <p id="language-error" class="field-error" hidden></p>
@@ -363,17 +357,17 @@
 
         <div class="settings-card">
           <section class="settings-section" aria-labelledby="provider-heading">
-            <h2 id="provider-heading">Gemini</h2>
+            <h2 id="provider-heading">Translation provider</h2>
             <label class="field-label" for="model-select">
               Model
               <select id="model-select" data-testid="model-select"></select>
             </label>
 
-            <label class="field-label" for="gemini-api-key">
-              Gemini API key
+            <label class="field-label" for="provider-api-key">
+              <span id="api-key-label">API key</span>
               <input
-                id="gemini-api-key"
-                data-testid="gemini-api-key"
+                id="provider-api-key"
+                data-testid="provider-api-key"
                 type="password"
                 autocomplete="new-password"
                 spellcheck="false"

@@ -10,6 +10,7 @@ from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
 from threading import RLock
+from typing import cast
 from uuid import uuid4
 
 from pydantic import SecretStr
@@ -17,7 +18,7 @@ from pydantic import SecretStr
 from transcribl.application.editorial import EditorialService
 from transcribl.application.pipeline import TranslationPipeline
 from transcribl.application.prompting import PROMPT_VERSION, TABLE_PROMPT_VERSION
-from transcribl.config import ProjectConfig
+from transcribl.config import ProjectConfig, ProviderName
 from transcribl.domain.enums import JobStatus
 from transcribl.domain.errors import ArtifactError, TranscriblError
 from transcribl.domain.models import (
@@ -70,6 +71,7 @@ class WebJobSnapshot:
     total_pages: int | None
     error: str | None
     translation_run_id: str | None
+    provider: str = "gemini"
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,6 +119,7 @@ class _WebJobRecord:
                 total_pages=self.total_pages,
                 error=self.error,
                 translation_run_id=self.translation_run_id,
+                provider=self.runtime_config.provider.name,
             )
 
 
@@ -637,7 +640,7 @@ class WebJobManager:
                     manifest.status is not JobStatus.FAILED
                     or translation_run_id is None
                     or manifest.translation_settings is None
-                    or manifest.provider_name != "gemini"
+                    or manifest.provider_name not in ("gemini", "openai", "anthropic")
                     or manifest.provider_model is None
                 ):
                     continue
@@ -831,8 +834,13 @@ def _runtime_config_for_failed_manifest(
         update=manifest.translation_settings.model_dump(mode="python")
     )
     extraction = base_config.extraction.model_copy(update={"image_dpi": manifest.image_dpi})
-    gemini = base_config.provider.gemini.model_copy(update={"model": manifest.provider_model})
-    provider = base_config.provider.model_copy(update={"gemini": gemini})
+    name = manifest.provider_name
+    if name not in ("gemini", "openai", "anthropic"):
+        raise ArtifactError("Failed translation uses an unsupported provider")
+    selected = base_config.provider.settings_for(cast(ProviderName, name)).model_copy(
+        update={"model": manifest.provider_model}
+    )
+    provider = base_config.provider.model_copy(update={"name": name, name: selected})
     return base_config.model_copy(
         update={
             "translation": translation,

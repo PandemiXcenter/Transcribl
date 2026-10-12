@@ -26,8 +26,8 @@ from transcribl.application.web_jobs import (
     WebJobNotFoundError,
     WebJobNotReadyError,
 )
-from transcribl.composition import build_pipeline, gemini_translator
-from transcribl.config import ProjectConfig, SecretSettings
+from transcribl.composition import build_pipeline, provider_translator
+from transcribl.config import ProjectConfig, ProviderName, SecretSettings
 from transcribl.domain.editorial import (
     ReviewDocument,
     UncertaintyFallback,
@@ -71,16 +71,17 @@ def create_app(
     """Create the local editor without exposing secrets or filesystem paths."""
 
     owns_manager = job_manager is None
+    local_secret_store = secret_store or DotenvSecretStore(default_secret_path())
     manager = job_manager or WebJobManager(
         config=config,
         pipeline_factory=build_pipeline,
         repository_factory=FilesystemArtifactRepository,
-        translator_factory=lambda runtime_config, api_key: gemini_translator(
+        translator_factory=lambda runtime_config, api_key: provider_translator(
             runtime_config,
             api_key=api_key,
+            secret_path=local_secret_store.path,
         ),
     )
-    local_secret_store = secret_store or DotenvSecretStore(default_secret_path())
     local_pdf_compiler = pdf_compiler or LatexPdfCompiler(
         engine=config.pdf_export.latex_engine,
         timeout_seconds=config.pdf_export.compile_timeout_seconds,
@@ -140,8 +141,22 @@ def create_app(
             "translation": config.translation.model_dump(mode="json"),
             "provider": {
                 "name": config.provider.name,
-                "model": config.provider.gemini.model,
-                "selectable_models": config.provider.gemini.selectable_models,
+                "model": config.provider.selected.model,
+                "selectable_models": [
+                    model
+                    for name in ("gemini", "openai", "anthropic")
+                    for model in config.provider.settings_for(name).selectable_models
+                ],
+                "models": [
+                    {"id": model, "provider": name}
+                    for name in ("gemini", "openai", "anthropic")
+                    for model in config.provider.settings_for(name).selectable_models
+                ],
+            },
+            "language_choices": config.web.language_choices,
+            "api_keys": {
+                name: _api_key_status(local_secret_store, name)
+                for name in ("gemini", "openai", "anthropic")
             },
             "extraction": config.extraction.model_dump(mode="json"),
             "automation": {
@@ -200,13 +215,18 @@ def create_app(
         glossary: Annotated[str, Form()] = "[]",
         settings: Annotated[str | None, Form()] = None,
         gemini_api_key: Annotated[str | None, Form()] = None,
+        api_key: Annotated[str | None, Form()] = None,
         at_csrf: Annotated[str | None, Cookie()] = None,
         x_csrf_token: Annotated[str | None, Header()] = None,
     ) -> JSONResponse:
         _require_csrf(at_csrf, x_csrf_token)
         resolved_glossary = _parse_glossary(glossary, config)
         runtime_config, auto_continue = _parse_job_settings(settings, config)
-        session_api_key = _parse_session_api_key(gemini_api_key)
+        if gemini_api_key and runtime_config.provider.name != "gemini":
+            raise HTTPException(
+                status_code=422, detail="Gemini key cannot be used for another provider"
+            )
+        session_api_key = _parse_session_api_key(api_key or gemini_api_key)
         upload_path, display_filename = await _stage_upload(pdf, config)
         try:
             snapshot = manager.submit(
@@ -230,17 +250,18 @@ def create_app(
     ) -> dict[str, bool]:
         _require_csrf(at_csrf, x_csrf_token)
         if command.save_on_computer:
-            local_secret_store.save_gemini_api_key(command.api_key)
-        return _api_key_status(local_secret_store)
+            local_secret_store.save_api_key(command.provider, command.api_key)
+        return _api_key_status(local_secret_store, command.provider)
 
     @app.delete("/api/settings/api-key")
     def clear_saved_api_key(
+        provider: ProviderName = "gemini",
         at_csrf: Annotated[str | None, Cookie()] = None,
         x_csrf_token: Annotated[str | None, Header()] = None,
     ) -> dict[str, bool]:
         _require_csrf(at_csrf, x_csrf_token)
-        local_secret_store.clear_gemini_api_key()
-        return _api_key_status(local_secret_store)
+        local_secret_store.clear_api_key(provider)
+        return _api_key_status(local_secret_store, provider)
 
     @app.get("/api/jobs/{job_id}")
     def job_status(job_id: str) -> dict[str, object]:
@@ -540,7 +561,7 @@ def _parse_job_settings(
 ) -> tuple[ProjectConfig, bool]:
     if raw is None or not raw.strip():
         requested = JobTranslationSettings(
-            model=config.provider.gemini.model,
+            model=config.provider.selected.model,
             source_language=config.translation.source_language,
             target_language=config.translation.target_language,
             style=config.translation.style,
@@ -564,11 +585,13 @@ def _parse_job_settings(
                 detail="Translation settings are invalid",
             ) from exc
 
-    if requested.model not in config.provider.gemini.selectable_models:
+    try:
+        selected_provider = config.provider.provider_for_model(requested.model)
+    except ValueError:
         raise HTTPException(
             status_code=422,
             detail="Select a model allowed by the project configuration",
-        )
+        ) from None
     if len(requested.footnote_appearance_instructions or "") > (
         config.web.max_instruction_characters
     ):
@@ -593,7 +616,12 @@ def _parse_job_settings(
         )
 
     provider = config.provider.model_copy(
-        update={"gemini": config.provider.gemini.model_copy(update={"model": requested.model})}
+        update={
+            "name": selected_provider,
+            selected_provider: config.provider.settings_for(selected_provider).model_copy(
+                update={"model": requested.model}
+            ),
+        }
     )
     translation = config.translation.model_copy(
         update={
@@ -643,22 +671,24 @@ def _parse_session_api_key(raw: str | None) -> SecretStr | None:
     except ValueError as exc:
         raise HTTPException(
             status_code=422,
-            detail="Gemini API key must be a nonblank single-line value",
+            detail="API key must be a nonblank single-line value",
         ) from exc
 
 
-def _api_key_status(secret_store: DotenvSecretStore) -> dict[str, bool]:
+def _api_key_status(
+    secret_store: DotenvSecretStore, provider: ProviderName = "gemini"
+) -> dict[str, bool]:
     return {
         "api_key_configured": (
-            _environment_api_key_configured() or secret_store.has_gemini_api_key()
+            _environment_api_key_configured(provider) or secret_store.has_api_key(provider)
         ),
-        "saved_on_computer": secret_store.has_gemini_api_key(),
+        "saved_on_computer": secret_store.has_api_key(provider),
     }
 
 
-def _environment_api_key_configured() -> bool:
+def _environment_api_key_configured(provider: ProviderName = "gemini") -> bool:
     try:
-        return SecretSettings().gemini_api_key is not None
+        return SecretSettings(_env_file=None).for_provider(provider) is not None
     except ValidationError:
         return False
 

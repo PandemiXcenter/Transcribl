@@ -22,6 +22,8 @@ const state = {
   activeUncertaintyId: null,
   scrollFrame: null,
   sessionApiKey: "",
+  keyStates: {},
+  keyProvider: null,
   apiKeyConfigured: false,
   apiKeySaved: false,
 };
@@ -115,7 +117,7 @@ const autoContinueHelp = document.querySelector("#auto-continue-help");
 const jobSettingsError = document.querySelector("#job-settings-error");
 const modelSelect = document.querySelector("#model-select");
 const translationStyle = document.querySelector("#translation-style");
-const geminiApiKey = document.querySelector("#gemini-api-key");
+const providerApiKey = document.querySelector("#provider-api-key");
 const saveApiKey = document.querySelector("#save-api-key");
 const apiKeyStatus = document.querySelector("#api-key-status");
 const apiKeyError = document.querySelector("#api-key-error");
@@ -529,17 +531,74 @@ function handleTranslationFormClick(event) {
 }
 
 function handleTranslationFormChange(event) {
+  if (event.target === sourceLanguageInput || event.target === targetLanguageInput) {
+    updateCustomLanguage(event.target, true);
+  }
   if (event.target === uncertaintyLevel) {
     updateUncertaintySetupState();
   }
+}
+
+function populateLanguage(select, value, choices) {
+  select.replaceChildren();
+  for (const language of choices || []) {
+    const option = createElement("option", "", language);
+    option.value = language;
+    select.append(option);
+  }
+  const custom = createElement("option", "", "Custom");
+  custom.value = "__custom__";
+  select.append(custom);
+  const known = (choices || []).includes(value);
+  select.value = known ? value : "__custom__";
+  document.querySelector(`#${select.id}-custom`).value = known ? "" : asText(value);
+  updateCustomLanguage(select);
+}
+
+function updateCustomLanguage(select, focus = false) {
+  const input = document.querySelector(`#${select.id}-custom`);
+  const custom = select.value === "__custom__";
+  input.hidden = !custom;
+  input.disabled = !custom;
+  input.required = custom;
+  if (custom && focus) input.focus();
+}
+
+function selectedLanguage(select) {
+  return (select.value === "__custom__"
+    ? document.querySelector(`#${select.id}-custom`).value
+    : select.value).trim();
+}
+
+function switchKeyProvider() {
+  const provider = state.config?.provider?.models?.find(
+    (model) => model.id === modelSelect.value,
+  )?.provider;
+  if (!provider || provider === state.keyProvider) return;
+  if (state.keyProvider) {
+    state.keyStates[state.keyProvider] = {
+      session: providerApiKey.value.trim() || state.sessionApiKey,
+      configured: state.apiKeyConfigured, saved: state.apiKeySaved,
+    };
+  }
+  state.keyProvider = provider;
+  const keyState = state.keyStates[provider] || {};
+  state.sessionApiKey = keyState.session || "";
+  providerApiKey.value = "";
+  saveApiKey.checked = Boolean(keyState.saved);
+  const providerLabel = provider === "openai" ? "OpenAI" : humanize(provider);
+  document.querySelector("#api-key-label").textContent = `${providerLabel} API key`;
+  setInlineError(apiKeyError, "");
+  settingsMessage.textContent = "";
+  updateApiKeyStatus(keyState.configured, keyState.saved);
 }
 
 function populateConfig(config) {
   state.config = config;
   const translation = config.translation || {};
   const provider = config.provider || {};
-  sourceLanguageInput.value = asText(translation.source_language);
-  targetLanguageInput.value = asText(translation.target_language);
+  populateLanguage(sourceLanguageInput, translation.source_language, config.language_choices);
+  populateLanguage(targetLanguageInput, translation.target_language, config.language_choices);
   if (["faithful", "balanced", "readable"].includes(translation.style)) {
     translationStyle.value = translation.style;
   }
@@ -620,10 +679,12 @@ function populateConfig(config) {
     : configuredZoom;
   setReviewZoom(initialZoom);
 
-  updateApiKeyStatus(
-    Boolean(config.api_key_configured),
-    Boolean(config.api_key_saved_on_computer),
-  );
+  for (const [name, status] of Object.entries(config.api_keys || {})) {
+    state.keyStates[name] = {
+      session: "", configured: status.api_key_configured, saved: status.saved_on_computer,
+    };
+  }
+  switchKeyProvider();
   const contextCount = Math.max(
     0,
     Number(translation.previous_page_context_count) || 0,
@@ -632,7 +693,7 @@ function populateConfig(config) {
     ? ` Finalized text from up to ${contextCount} previous pages is included for continuity.`
     : " Prior-page continuity context is disabled.";
   document.querySelector("#privacy-note").textContent =
-    `${humanize(provider.name || "The configured provider")} receives the current page image ` +
+    "The selected provider receives the current page image " +
     "and extracted text. Table-bearing pages send that page again for table reconstruction." +
     continuityNotice +
     " Files and review data are stored locally.";
@@ -655,7 +716,7 @@ function updateApiKeyStatus(
   state.apiKeySaved = Boolean(saved);
   apiKeyStatus.textContent = state.apiKeySaved
     ? "A saved API key is available. Leave this field blank to use it."
-    : state.sessionApiKey || geminiApiKey.value.trim()
+    : state.sessionApiKey || providerApiKey.value.trim()
       ? "A session-only API key is ready for the next translation."
     : state.apiKeyConfigured
       ? "An API key is available for this session. Leave this field blank to use it."
@@ -664,8 +725,8 @@ function updateApiKeyStatus(
 }
 
 function validateJobSettings() {
-  const sourceLanguage = sourceLanguageInput.value.trim();
-  const targetLanguage = targetLanguageInput.value.trim();
+  const sourceLanguage = selectedLanguage(sourceLanguageInput);
+  const targetLanguage = selectedLanguage(targetLanguageInput);
   sourceLanguageInput.removeAttribute("aria-invalid");
   targetLanguageInput.removeAttribute("aria-invalid");
   if (!sourceLanguage || !targetLanguage) {
@@ -734,12 +795,12 @@ function validateJobSettings() {
   uncertaintyInstructions.removeAttribute("aria-invalid");
   setInlineError(jobSettingsError, "");
 
-  const enteredKey = geminiApiKey.value.trim() || state.sessionApiKey;
+  const enteredKey = providerApiKey.value.trim() || state.sessionApiKey;
   const useConfiguredApiKey = !enteredKey && state.apiKeyConfigured;
   if (!enteredKey && !useConfiguredApiKey) {
-    setInlineError(apiKeyError, "Enter a Gemini API key in Settings.");
+    setInlineError(apiKeyError, "Enter an API key for the selected provider in Settings.");
     activateTab("settings");
-    geminiApiKey.focus();
+    providerApiKey.focus();
     return null;
   }
   setInlineError(apiKeyError, "");
@@ -775,7 +836,8 @@ function setStartBusy(isBusy) {
 async function saveSettings() {
   clearGlobalError();
   settingsMessage.textContent = "";
-  const apiKey = geminiApiKey.value.trim();
+  const apiKey = providerApiKey.value.trim() || state.sessionApiKey;
+  const persistKey = saveApiKey.checked;
   if (!apiKey) {
     if (state.sessionApiKey || state.apiKeyConfigured) {
       settingsMessage.textContent = state.sessionApiKey
@@ -784,24 +846,26 @@ async function saveSettings() {
       return;
     }
     setInlineError(apiKeyError, "Enter an API key before saving settings.");
-    geminiApiKey.focus();
+    providerApiKey.focus();
     return;
   }
 
   saveSettingsButton.disabled = true;
+  modelSelect.disabled = jobModelSelect.disabled = true;
   setInlineError(apiKeyError, "");
   try {
     const result = await apiRequest("/api/settings/api-key", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        provider: state.keyProvider,
         api_key: apiKey,
-        save_on_computer: saveApiKey.checked,
+        save_on_computer: persistKey,
       }),
     });
-    if (saveApiKey.checked) {
+    if (persistKey) {
       state.sessionApiKey = "";
-      geminiApiKey.value = "";
+      providerApiKey.value = "";
       updateApiKeyStatus(
         Boolean(result?.api_key_configured ?? true),
         Boolean(result?.saved_on_computer ?? true),
@@ -809,6 +873,7 @@ async function saveSettings() {
       settingsMessage.textContent = "API key saved on this computer.";
     } else {
       state.sessionApiKey = apiKey;
+      providerApiKey.value = "";
       updateApiKeyStatus(
         Boolean(result?.api_key_configured ?? state.apiKeyConfigured),
         Boolean(result?.saved_on_computer ?? state.apiKeySaved),
@@ -820,6 +885,7 @@ async function saveSettings() {
     showGlobalError(error.message);
   } finally {
     saveSettingsButton.disabled = false;
+    modelSelect.disabled = jobModelSelect.disabled = false;
   }
 }
 
@@ -827,8 +893,12 @@ async function clearSavedApiKey() {
   clearGlobalError();
   settingsMessage.textContent = "";
   clearSavedKeyButton.disabled = true;
+  modelSelect.disabled = jobModelSelect.disabled = true;
   try {
-    const result = await apiRequest("/api/settings/api-key", { method: "DELETE" });
+    const result = await apiRequest(
+      `/api/settings/api-key?provider=${encodeURIComponent(state.keyProvider)}`,
+      { method: "DELETE" },
+    );
     updateApiKeyStatus(
       Boolean(result?.api_key_configured),
       Boolean(result?.saved_on_computer),
@@ -839,6 +909,7 @@ async function clearSavedApiKey() {
     showGlobalError(error.message);
   } finally {
     clearSavedKeyButton.disabled = false;
+    modelSelect.disabled = jobModelSelect.disabled = false;
   }
 }
 
@@ -905,7 +976,10 @@ async function continueStoppedJob() {
   }
   clearGlobalError();
   setStoppedJobActionsBusy(true);
-  const key = geminiApiKey.value.trim() || state.sessionApiKey;
+  const resumeProvider = state.job?.provider;
+  const key = resumeProvider === state.keyProvider
+    ? providerApiKey.value.trim() || state.sessionApiKey
+    : state.keyStates[resumeProvider]?.session || "";
   try {
     const job = await apiRequest(
       `/api/jobs/${encodeURIComponent(state.jobId)}/continue`,
@@ -1033,7 +1107,7 @@ async function startTranslation(event) {
   );
   body.append("settings", JSON.stringify(jobSettings.settings));
   if (jobSettings.sessionKey) {
-    body.append("gemini_api_key", jobSettings.sessionKey);
+    body.append("api_key", jobSettings.sessionKey);
   }
   try {
     const job = await apiRequest("/api/jobs", { method: "POST", body });
@@ -2989,12 +3063,14 @@ mappingBody.addEventListener("input", handleMappingInput);
 form.addEventListener("submit", startTranslation);
 modelSelect.addEventListener("change", () => {
   jobModelSelect.value = modelSelect.value;
+  switchKeyProvider();
 });
 translationStyle.addEventListener("change", () => {
   jobTranslationStyle.value = translationStyle.value;
 });
 jobModelSelect.addEventListener("change", () => {
   modelSelect.value = jobModelSelect.value;
+  switchKeyProvider();
 });
 jobTranslationStyle.addEventListener("change", () => {
   translationStyle.value = jobTranslationStyle.value;
@@ -3133,7 +3209,7 @@ saveSettingsButton.addEventListener("click", saveSettings);
 clearSavedKeyButton.addEventListener("click", clearSavedApiKey);
 form.addEventListener("click", handleTranslationFormClick);
 form.addEventListener("change", handleTranslationFormChange);
-geminiApiKey.addEventListener("input", () => {
+providerApiKey.addEventListener("input", () => {
   setInlineError(apiKeyError, "");
   settingsMessage.textContent = "";
   updateApiKeyStatus();

@@ -9,7 +9,7 @@ an additional deterministic projection.
 
 The repository includes the backend pipeline, CLI, and a small tabbed FastAPI
 interface for colleagues. The interface provides PDF upload, per-job language
-selection, authoritative term mappings, Gemini settings, side-by-side review,
+selection, authoritative term mappings, provider settings, side-by-side review,
 append-only corrections, qualitative uncertainty review, footnote ownership and
 marker editing, and reviewed LaTeX, PDF, Markdown, and plain-text downloads. It is
 a loopback-only workstation
@@ -22,7 +22,7 @@ multi-user application.
 PDF
   -> split into one-page PDF streams
   -> MarkItDown Markdown + matching rendered PNG per physical page
-  -> one Gemini image+Markdown page-translation request
+  -> one provider image+Markdown page-translation request
   -> when tagged: one batched table-reconstruction request for that page
   -> strict structured-output validation and per-pass trusted provenance
   -> canonical runs/<translation-run-id>/output/document.json
@@ -131,7 +131,7 @@ TOML file to disable automatic opening. The interface is organized as an interna
 workbench:
 
 - **Translate** selects a laptop PDF and shows the complete per-job choices before
-  submission: input/output languages, Gemini model, translation style, finalized
+  submission: input/output languages, provider model, translation style, finalized
   previous-page text context, current-page image DPI, and optional simple guidance
   describing how footnotes look in the selected PDF. The fields start from
   TOML defaults; the checked-in language direction is Danish to English.
@@ -143,8 +143,8 @@ workbench:
 - **Term mappings** lets you define authoritative source-term to target-term
   mappings for the next job. These are added to the configured glossary and sent
   with each page prompt.
-- **Settings** selects a Gemini model from the TOML allowlist and a translation
-  style. A Gemini key can be used for the current browser session, or **Save on
+- **Settings** selects a provider model from the TOML allowlist and a translation
+  style. Each provider key can be used for the current browser session, or **Save on
   this computer** can store it locally for later sessions. The saved value is
   never returned to or displayed by the interface.
 - **Articles** opens with a catalog of every valid completed translation run found
@@ -318,7 +318,7 @@ term mappings are explicit per-job selections; the resolved values are passed
 through the same application boundary and persisted as run provenance. The
 uncertainty choices are configured by `web.uncertainty_level_choices`; **Off**
 retains compatibility by resolving `mark_uncertain_terms=false`. A model can be
-selected only when it appears in `provider.gemini.selectable_models`.
+selected only when it appears in `provider.<name>.selectable_models`.
 
 `.env` is exclusively for `GEMINI_API_KEY`. Do not add model names, paths,
 translation choices, or other non-secret behavior to environment variables. The
@@ -326,6 +326,42 @@ Settings checkbox labeled **Save on this computer** writes only this key to the
 local `.env`; leaving it unchecked keeps the entered key in browser/process
 memory for the current session and job. The API exposes only boolean key-status
 flags, never the key value.
+
+### Provider and language choices
+
+The model dropdown includes Gemini 3.8 Flash (`gemini-3.8-flash`, the default),
+GPT-6 Astra (`gpt-6-astra`), and Claude Opus 5.5 (`claude-opus-5-5`). Selecting a
+model routes both page translation and table reconstruction to its provider.
+Settings switches to that provider's API key. **Save on this computer** stores
+Gemini in the existing ignored `.env`; OpenAI and Anthropic keys are stored
+separately in the ignored `.provider-keys` credential cache beside it. These
+files use mode 0600 on POSIX. Clearing one key leaves other keys intact.
+No key is stored in browser local storage, public API responses, or translation
+artifacts. Unchecked keys remain in session memory. CLI users may also supply
+`OPENAI_API_KEY` or `ANTHROPIC_API_KEY` in their process environment. API access
+and billing belong to the respective provider account.
+
+Both language dropdowns use `web.language_choices`, with **Custom** last for a
+manually entered language. A configured language outside the list automatically
+opens Custom without losing its value.
+
+`[provider.openai]` and `[provider.anthropic]` define model allowlists, bounded
+request timeouts/attempts, inline-size guards, and output token caps. CLI users
+select the default with `provider.name`. SDK retries equal `request_attempts - 1`.
+Model, structured-output contract, and output token cap affect checkpoint identity;
+transport timeout/retry/size limits remain operational provenance. Failed-run
+recovery restores the original provider and model.
+
+Existing personal TOML files must add the two new provider sections and
+`web.language_choices` from `config/default.toml`; add `gemini-3.8-flash` to the
+Gemini allowlist to select it. Configuration remains strict rather than silently
+changing personal choices. Existing completed translations remain readable.
+
+Model/API references: [OpenAI GPT-6 Astra](https://developers.openai.com/api/docs/models/gpt-6-astra),
+[OpenAI structured outputs](https://developers.openai.com/api/docs/guides/structured-outputs),
+[Claude Opus 5.5](https://platform.claude.com/docs/en/models/opus-5-5/overview),
+[Anthropic structured outputs](https://platform.claude.com/docs/en/build-with-claude/structured-outputs),
+and [Gemini 3.8 Flash](https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash).
 
 ## Canonical data and output artifacts
 
@@ -450,7 +486,7 @@ rather than being attached to a guessed run.
 │   ├── adapters/
 │   │   ├── extraction/             # MarkItDown + PDFium page pairing
 │   │   ├── export/                 # bounded local XeLaTeX compilation
-│   │   ├── llm/                    # Gemini SDK boundary
+│   │   ├── llm/                    # Provider SDK boundaries
 │   │   ├── secrets/                # narrow local GEMINI_API_KEY persistence
 │   │   └── storage/                # atomic machine and revision artifacts
 │   ├── interfaces/web/             # FastAPI endpoints + tabbed local UI
@@ -496,7 +532,7 @@ RESOURCE_EXHAUSTED` requires checking quota or rate limits.
 The adapter supplies Gemini with the Pydantic contract through the SDK's current
 JSON Schema field, then validates the returned JSON locally before persistence.
 
-The live Gemini path has not been verified by the automated suite.
+The live Gemini, OpenAI, and Anthropic paths have not been verified by the automated suite.
 
 ## Current limitations
 

@@ -429,7 +429,7 @@ duplicate translation settings.
 
 The local interface uses those settings as defaults and limits. Explicit
 per-job language, model, style, and term-mapping inputs are validated at the HTTP
-boundary and applied to a copied runtime config. The default Gemini model must be
+boundary and applied to a copied runtime config. The default provider model must be
 present in `selectable_models`; the interface rejects any model outside that
 allowlist. `translation.previous_page_context_count` is a required TOML setting
 bounded from 0 through 10 and defaults to 2 in the checked-in file. Its resolved
@@ -518,7 +518,7 @@ The browser interface is intentionally operational rather than promotional:
   for explicit reviewer targets.
 - **Term mappings** supplies authoritative archaic or specialist translations
   for the next job.
-- **Settings** selects an allowlisted Gemini model, translation style, and key
+- **Settings** selects an allowlisted provider model, translation style, and key
   persistence behavior.
 - **Articles** first presents the filesystem-backed catalog of completed runs,
   editorial progress, a conditional Review/Read action, and the four-format
@@ -586,3 +586,22 @@ tables. Neither is presented as a schema 6.0 reconstruction or automatically
 sent through the new follow-up. Translated figures are rejected because they were
 never valid schema 2.0 blocks. Version 1.0 manifests and translations remain
 rejected; no run identity is inferred for them.
+
+## Multiple provider composition
+
+The composition root selects Gemini, OpenAI Responses, or Anthropic Messages from
+`provider.name`. All implement both provider-neutral translation methods using
+the same Pydantic page/table contracts. OpenAI and Anthropic SDK parsing applies
+the provider-specific structured schema and revalidates output locally. Each
+request carries exactly one current-page image and the full assembled prompt.
+Incomplete/refused output is rejected. OpenAI response storage is disabled.
+HTTP failures are reduced to safe status codes and fixed guidance.
+
+The web model allowlists map each model ID to exactly one provider. Key save,
+status, clear, submission, and stopped-run continuation are provider-specific.
+Gemini retains its `.env` contract; OpenAI and Anthropic use a separate ignored
+`.provider-keys` cache in the same runtime directory, written atomically with
+private POSIX permissions. Only the supported provider key names may be written.
+Language choices are TOML-backed and Custom submits an ordinary bounded language
+string. Provider/model/output semantics participate in both fingerprints;
+operational timeout/retry/size settings do not invalidate completed pages.

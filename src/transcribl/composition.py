@@ -8,6 +8,7 @@ from pydantic import SecretStr
 
 from transcribl.adapters.extraction import MarkItDownPageExtractor
 from transcribl.adapters.llm import GeminiPageTranslator
+from transcribl.adapters.llm.structured import AnthropicPageTranslator, OpenAIPageTranslator
 from transcribl.adapters.storage import FilesystemArtifactRepository
 from transcribl.application.pipeline import TranslationPipeline
 from transcribl.config import ProjectConfig, SecretSettings
@@ -26,16 +27,29 @@ def build_pipeline() -> TranslationPipeline:
 
 
 @contextmanager
-def gemini_translator(
+def provider_translator(
     config: ProjectConfig,
     *,
     api_key: SecretStr | None = None,
+    secret_path: Path | None = None,
 ) -> Iterator[PageTranslator]:
-    """Build one configured Gemini adapter without leaking its secret."""
+    """Build one configured provider adapter without leaking its secret."""
 
-    secret = api_key or SecretSettings(_env_file=default_secret_path()).gemini_api_key
+    name = config.provider.name
+    key_path = secret_path or default_secret_path()
+    if name != "gemini":
+        key_path = key_path.with_name(".provider-keys")
+    secret = api_key or SecretSettings(_env_file=key_path).for_provider(name)
     if secret is None:
-        raise ValueError("GEMINI_API_KEY is required in the environment or an ignored .env file")
+        raise ValueError(
+            f"{name.upper()}_API_KEY is required in the environment or saved in Settings"
+        )
+    if name in ("openai", "anthropic"):
+        adapter = OpenAIPageTranslator if name == "openai" else AnthropicPageTranslator
+        settings = config.provider.openai if name == "openai" else config.provider.anthropic
+        with adapter(api_key=secret.get_secret_value(), config=settings) as structured_translator:
+            yield structured_translator
+        return
     gemini = config.provider.gemini
     with GeminiPageTranslator(
         api_key=secret.get_secret_value(),
@@ -58,10 +72,14 @@ def translate_with_config(
     """Translate through the same composition boundary for CLI and web."""
 
     active_pipeline = pipeline or build_pipeline()
-    with gemini_translator(config) as translator:
+    with provider_translator(config) as translator:
         return active_pipeline.translate_document(
             job_dir,
             settings=config.translation,
             translator=translator,
             force=force,
         )
+
+
+# Retain the previous composition entry point for local integrations.
+gemini_translator = provider_translator

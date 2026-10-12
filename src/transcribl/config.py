@@ -13,6 +13,8 @@ from transcribl.domain.models import (
     TranslationSettings,
 )
 
+ProviderName = Literal["gemini", "openai", "anthropic"]
+
 
 class SecretSettings(BaseSettings):
     """Secrets only. Every non-secret setting belongs in TOML."""
@@ -30,6 +32,20 @@ class SecretSettings(BaseSettings):
         validation_alias="GEMINI_API_KEY",
     )
 
+    openai_api_key: SecretStr | None = Field(
+        default=None, min_length=1, validation_alias="OPENAI_API_KEY"
+    )
+    anthropic_api_key: SecretStr | None = Field(
+        default=None, min_length=1, validation_alias="ANTHROPIC_API_KEY"
+    )
+
+    def for_provider(self, provider: ProviderName) -> SecretStr | None:
+        return {
+            "gemini": self.gemini_api_key,
+            "openai": self.openai_api_key,
+            "anthropic": self.anthropic_api_key,
+        }[provider]
+
 
 class ConfigModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -43,10 +59,9 @@ class ExtractionConfig(ConfigModel):
     image_dpi: int = Field(ge=72, le=600)
 
 
-class GeminiConfig(ConfigModel):
+class ModelProviderConfig(ConfigModel):
     model: NonEmptyText
     selectable_models: list[NonEmptyText]
-    api_version: NonEmptyText
     request_timeout_seconds: int = Field(ge=1, le=900)
     request_attempts: int = Field(ge=1, le=10)
     max_inline_request_bytes: int = Field(ge=1_000_000, le=20_000_000)
@@ -60,12 +75,47 @@ class GeminiConfig(ConfigModel):
         return self
 
 
+class GeminiConfig(ModelProviderConfig):
+    api_version: NonEmptyText
+
+
+class StructuredProviderConfig(ModelProviderConfig):
+    max_output_tokens: int = Field(ge=1024, le=128_000)
+
+
 class ProviderConfig(ConfigModel):
-    name: Literal["gemini"]
+    name: ProviderName
     gemini: GeminiConfig
+    openai: StructuredProviderConfig
+    anthropic: StructuredProviderConfig
+
+    def settings_for(self, name: ProviderName) -> ModelProviderConfig:
+        return {"gemini": self.gemini, "openai": self.openai, "anthropic": self.anthropic}[name]
+
+    @property
+    def selected(self) -> ModelProviderConfig:
+        return self.settings_for(self.name)
+
+    def provider_for_model(self, model: str) -> ProviderName:
+        for name in ("gemini", "openai", "anthropic"):
+            if model in self.settings_for(name).selectable_models:
+                return name
+        raise ValueError("Select a model allowed by the project configuration")
+
+    @model_validator(mode="after")
+    def model_names_are_unambiguous(self) -> Self:
+        models = [
+            model
+            for name in ("gemini", "openai", "anthropic")
+            for model in self.settings_for(name).selectable_models
+        ]
+        if len(models) != len(set(models)):
+            raise ValueError("selectable model IDs must be unique across providers")
+        return self
 
 
 class WebConfig(ConfigModel):
+    language_choices: list[NonEmptyText] = Field(min_length=1)
     host: Literal["127.0.0.1", "::1", "localhost"]
     port: int = Field(ge=1, le=65_535)
     open_browser_on_start: bool
@@ -84,6 +134,13 @@ class WebConfig(ConfigModel):
 
     @model_validator(mode="after")
     def web_choices_are_selectable_and_bounded(self) -> Self:
+        if len(self.language_choices) != len(set(self.language_choices)):
+            raise ValueError("language_choices must be unique")
+        if any(
+            language.casefold() in {"custom", "__custom__"} or len(language) > 100
+            for language in self.language_choices
+        ):
+            raise ValueError("language choices must be at most 100 characters and cannot be Custom")
         if not self.uncertainty_level_choices:
             raise ValueError("uncertainty_level_choices must not be empty")
         if len(self.uncertainty_level_choices) != len(set(self.uncertainty_level_choices)):

@@ -11,8 +11,9 @@ from transcribl.domain.errors import ConfigurationError
 def test_default_toml_is_the_complete_non_secret_configuration() -> None:
     config = load_project_config(Path("config/default.toml"))
 
-    assert config.provider.gemini.model == "gemini-3.6-flash"
+    assert config.provider.gemini.model == "gemini-3.8-flash"
     assert config.provider.gemini.selectable_models == [
+        "gemini-3.8-flash",
         "gemini-3.6-flash",
         "gemini-3.5-flash",
         "gemini-3.5-flash-lite",
@@ -168,7 +169,7 @@ def test_missing_nested_setting_is_rejected(tmp_path: Path) -> None:
     source = Path("config/default.toml").read_text(encoding="utf-8")
     path = tmp_path / "missing-model.toml"
     path.write_text(
-        source.replace('model = "gemini-3.6-flash"\n', ""),
+        source.replace('model = "gemini-3.8-flash"\n', ""),
         encoding="utf-8",
     )
 
@@ -224,7 +225,7 @@ def test_default_model_must_be_in_selectable_models(tmp_path: Path) -> None:
     path = tmp_path / "invalid-model-list.toml"
     path.write_text(
         source.replace(
-            'model = "gemini-3.6-flash"',
+            'model = "gemini-3.8-flash"',
             'model = "gemini-not-in-list"',
             1,
         ),
@@ -305,3 +306,26 @@ def test_review_zoom_choices_are_strict(
 
     with pytest.raises(ConfigurationError, match=message):
         load_project_config(path)
+
+
+@pytest.mark.parametrize("provider", ["openai", "anthropic"])
+def test_new_provider_config_is_strict_and_bounded(provider: str) -> None:
+    from transcribl.config import ProjectConfig
+
+    data = load_project_config(Path("config/default.toml")).model_dump()
+    data["provider"][provider]["max_output_tokens"] = 0
+    with pytest.raises(ValidationError, match="max_output_tokens"):
+        ProjectConfig.model_validate(data)
+    del data["provider"][provider]["max_output_tokens"]
+    with pytest.raises(ValidationError, match="Field required"):
+        ProjectConfig.model_validate(data)
+
+
+@pytest.mark.parametrize("choices", [[], ["English", "English"], ["Custom"], ["A" * 101]])
+def test_language_choices_reject_invalid_values(choices: list[str]) -> None:
+    from transcribl.config import ProjectConfig
+
+    data = load_project_config(Path("config/default.toml")).model_dump()
+    data["web"]["language_choices"] = choices
+    with pytest.raises(ValidationError):
+        ProjectConfig.model_validate(data)

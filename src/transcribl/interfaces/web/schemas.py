@@ -2,6 +2,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 
+from transcribl.config import ProviderName
 from transcribl.domain.enums import BlockType, ReviewStatus, TranslationStyle
 from transcribl.domain.models import BlockId, NonEmptyText
 
@@ -37,6 +38,7 @@ class JobTranslationSettings(ApiModel):
 
 
 class ApiKeySettingsRequest(ApiModel):
+    provider: ProviderName = "gemini"
     api_key: SecretStr = Field(min_length=1, max_length=4_000)
     save_on_computer: bool
 

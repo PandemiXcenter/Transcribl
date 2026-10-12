@@ -141,3 +141,23 @@ def test_save_appends_without_rewriting_existing_line_endings(tmp_path: Path) ->
     assert path.read_bytes() == (
         b"# existing comment\r\nOTHER=value\r\nGEMINI_API_KEY='saved-key'\r\n"
     )
+
+
+def test_provider_keys_are_saved_loaded_and_cleared_independently(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / ".env"
+    path.write_text("# preserve this\nOTHER=safe\n")
+    store = DotenvSecretStore(path)
+    for provider in ("gemini", "openai", "anthropic"):
+        monkeypatch.delenv(f"{provider.upper()}_API_KEY", raising=False)
+        store.save_api_key(provider, f"test-{provider}")
+        assert store.has_api_key(provider)
+        secret = SecretSettings(_env_file=store.path_for(provider)).for_provider(provider)
+        assert secret is not None and secret.get_secret_value() == f"test-{provider}"
+    assert "OPENAI_API_KEY" not in path.read_text()
+    assert "ANTHROPIC_API_KEY" not in path.read_text()
+    store.clear_api_key("openai")
+    assert not store.has_api_key("openai")
+    assert store.has_api_key("gemini") and store.has_api_key("anthropic")
+    assert "# preserve this\nOTHER=safe\n" in path.read_text()
