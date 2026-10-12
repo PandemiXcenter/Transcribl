@@ -40,6 +40,7 @@ def test_default_toml_is_the_complete_non_secret_configuration() -> None:
     assert config.web.auto_continue_default is False
     assert config.web.auto_continue_attempts == 1
     assert config.web.max_instruction_characters == 4_000
+    assert config.web.max_glossary_name_characters == 100
     assert config.web.uncertainty_level_choices == ["off", "low", "standard", "high"]
     assert config.web.review_zoom_levels == [100, 125, 150, 175, 200]
     assert config.web.review_zoom_default_percent == 100
@@ -152,6 +153,20 @@ unexpected = "typo"
     )
 
     with pytest.raises(ConfigurationError, match="unexpected"):
+        load_project_config(path)
+
+
+@pytest.mark.parametrize("value", [None, 0, 501])
+def test_glossary_name_limit_is_required_and_bounded(tmp_path: Path, value: int | None) -> None:
+    source = Path("config/default.toml").read_text(encoding="utf-8")
+    path = tmp_path / "invalid-glossary-limit.toml"
+    replacement = "" if value is None else f"max_glossary_name_characters = {value}\n"
+    path.write_text(
+        source.replace("max_glossary_name_characters = 100\n", replacement),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigurationError, match="max_glossary_name_characters"):
         load_project_config(path)
 
 

@@ -9,7 +9,7 @@ an additional deterministic projection.
 
 The repository includes the backend pipeline, CLI, and a small tabbed FastAPI
 interface for colleagues. The interface provides PDF upload, per-job language
-selection, authoritative term mappings, provider settings, side-by-side review,
+selection, reusable glossaries, provider settings, side-by-side review,
 append-only corrections, qualitative uncertainty review, footnote ownership and
 marker editing, and reviewed LaTeX, PDF, Markdown, and plain-text downloads. It is
 a loopback-only workstation
@@ -140,9 +140,12 @@ workbench:
   If a page remains failed, every earlier page checkpoint is retained:
   **Continue** validates and reuses them before another attempt, while **Cancel**
   pauses the screen without deleting those artifacts.
-- **Term mappings** lets you define authoritative source-term to target-term
-  mappings for the next job. These are added to the configured glossary and sent
-  with each page prompt.
+- **Glossaries** manages separate named sets of required source-term translations.
+  Create, rename, edit, save, or delete each glossary locally. On **Translate**,
+  choose one saved glossary, **Configured defaults** (when the TOML glossary has
+  entries), or **No glossary**. A saved glossary replaces the configured terms in
+  full. Unsaved edits must be saved before using the selected glossary. Each job
+  snapshots the saved terms; later glossary changes never alter that run.
 - **Settings** selects a provider model from the TOML allowlist and a translation
   style. Each provider key can be used for the current browser session, or **Save on
   this computer** can store it locally for later sessions. The saved value is
@@ -314,7 +317,7 @@ keys are never stored there.
 The interface uses TOML values as defaults and limits. Input language, output
 language, model, translation style, previous-page text context, page-image DPI,
 uncertain-term level, optional uncertainty instructions, footnote appearance, and
-term mappings are explicit per-job selections; the resolved values are passed
+glossary selection is an explicit per-job choice; the resolved values are passed
 through the same application boundary and persisted as run provenance. The
 uncertainty choices are configured by `web.uncertainty_level_choices`; **Off**
 retains compatibility by resolving `mark_uncertain_terms=false`. A model can be
@@ -362,6 +365,24 @@ Model/API references: [OpenAI GPT-6 Astra](https://developers.openai.com/api/doc
 [Claude Opus 5.5](https://platform.claude.com/docs/en/models/opus-5-5/overview),
 [Anthropic structured outputs](https://platform.claude.com/docs/en/build-with-claude/structured-outputs),
 and [Gemini 3.8 Flash](https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash).
+
+### Saved glossaries
+
+Saved glossaries live in `<artifacts_dir>/.glossaries.json`, a versioned local
+catalog written atomically. Names and source terms must be unique within their
+respective scopes; original Unicode text is preserved. `web.max_glossary_entries`
+and `web.max_term_characters` limit each glossary, while the new required
+`web.max_glossary_name_characters` limits its name (100 in the default TOML).
+Add that setting when updating an older personal TOML file.
+
+Revision checks reject stale saves, deletes, and job selections. **Refresh** in
+Glossaries loads the latest saved versions; unsaved drafts are protected by a
+confirmation before switching or refreshing. The resolved mapping dictionary is
+persisted in each run's translation settings and participates in both page and
+table checkpoint fingerprints. Renaming or deleting a saved glossary cannot
+change the snapshot of a queued, completed, or stopped run. No database or remote
+storage is used. The older inline-glossary HTTP input remains supported for local
+clients and retains its configured-default merge behavior.
 
 ## Canonical data and output artifacts
 

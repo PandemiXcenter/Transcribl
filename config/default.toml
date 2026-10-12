@@ -88,6 +88,7 @@ open_browser_on_start = true
 max_upload_bytes = 100000000
 max_concurrent_jobs = 1
 max_pdf_pages = 500
+max_glossary_name_characters = 100
 max_glossary_entries = 500
 max_term_characters = 500
 max_instruction_characters = 4000

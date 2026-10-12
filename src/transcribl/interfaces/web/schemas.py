@@ -4,6 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 
 from transcribl.config import ProviderName
 from transcribl.domain.enums import BlockType, ReviewStatus, TranslationStyle
+from transcribl.domain.glossaries import GlossaryEntry
 from transcribl.domain.models import BlockId, NonEmptyText
 
 
@@ -11,9 +12,10 @@ class ApiModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class GlossaryEntry(ApiModel):
-    source_term: NonEmptyText
-    target_translation: NonEmptyText
+class GlossaryWriteRequest(ApiModel):
+    name: NonEmptyText
+    entries: list[GlossaryEntry]
+    expected_revision: int | None = Field(default=None, ge=1)
 
 
 class JobTranslationSettings(ApiModel):

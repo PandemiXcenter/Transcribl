@@ -208,8 +208,10 @@ returned text locally; it does not depend on the legacy provider-schema field.
 The ordinary suite mocks both calls; neither the live primary request nor the
 live table follow-up has been verified against a Gemini account.
 
-Configured glossary entries and the per-job Term mappings table are merged into
-the resolved `TranslationSettings`. The prompt states that these source-to-target
+The selected saved glossary is resolved through `GlossaryService` and copied into
+the resolved `TranslationSettings`, replacing configured defaults in full. The
+user can instead select configured defaults or explicitly select no glossary.
+Legacy inline-glossary HTTP submissions retain their existing merge behavior. The prompt states that these source-to-target
 mappings are authoritative; they are not suggestions inferred by the model.
 Input language, output language, model, and style can be selected for one web
 job. Their initial values and the selectable model allowlist come from TOML, and
@@ -516,8 +518,8 @@ The browser interface is intentionally operational rather than promotional:
   the defaults; the checked-in direction is Danish to English. Job settings also
   expose the config-allowlisted uncertainty level and an optional expandable field
   for explicit reviewer targets.
-- **Term mappings** supplies authoritative archaic or specialist translations
-  for the next job.
+- **Glossaries** manages named, locally saved sets of authoritative term translations;
+  Translate selects which saved set (if any) applies to the next job.
 - **Settings** selects an allowlisted provider model, translation style, and key
   persistence behavior.
 - **Articles** first presents the filesystem-backed catalog of completed runs,
@@ -605,3 +607,25 @@ private POSIX permissions. Only the supported provider key names may be written.
 Language choices are TOML-backed and Custom submits an ordinary bounded language
 string. Provider/model/output semantics participate in both fingerprints;
 operational timeout/retry/size settings do not invalidate completed pages.
+
+## Named glossary library
+
+`SavedGlossary` and `GlossaryLibrary` are strict domain contracts with an
+independent library schema version 1.0; the canonical document schema is unchanged.
+`GlossaryService` owns name/term limits and submission-time revision validation.
+Its repository port is implemented by a filesystem catalog at
+`<artifacts_dir>/.glossaries.json`, with atomic replacement and a process-wide lock.
+Save/delete operations compare the expected revision while holding that lock,
+preventing two browser sessions from silently overwriting the same revision.
+This is single-process local coordination, not multi-process storage.
+
+The HTTP interface offers GET/POST `/api/glossaries` and PUT/DELETE
+`/api/glossaries/{id}`. Mutations retain CSRF protection and no-store headers.
+POST `/api/jobs` accepts a saved `glossary_id` and `glossary_revision`, or the
+explicit `none` choice. Mixing saved selection and inline mappings is rejected.
+Resolution occurs before upload staging. The job receives a copied dictionary,
+not a live library reference. Its existing canonical translation settings retain
+that snapshot across execution, retries, library edits, or glossary deletion.
+Both provider-pass fingerprints already include these settings. Browser code
+never receives catalog filesystem paths. Corrupt catalogs fail visibly and are
+never overwritten as an empty library.

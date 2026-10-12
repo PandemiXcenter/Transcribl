@@ -36,7 +36,7 @@
         aria-controls="mappings-panel"
         tabindex="-1"
         data-tab="mappings"
-      >Term mappings</button>
+      >Glossaries</button>
       <button
         id="settings-tab"
         class="tab-button"
@@ -125,6 +125,14 @@
             </div>
             <p id="language-error" class="field-error" hidden></p>
 
+            <label class="field-label glossary-job-choice" for="job-glossary-select">
+              Glossary
+              <select id="job-glossary-select" disabled aria-describedby="job-glossary-help">
+                <option value="none">Loading glossaries…</option>
+              </select>
+              <small id="job-glossary-help">Manage saved glossaries in the Glossaries tab.</small>
+            </label>
+
             <section class="job-settings" aria-labelledby="job-settings-heading">
               <div class="job-settings-heading">
                 <div>
@@ -134,7 +142,7 @@
               </div>
               <div class="job-settings-grid">
                 <label class="field-label" for="job-model-select">
-                  Gemini model
+                  Model
                   <select id="job-model-select" data-testid="job-model-select"></select>
                 </label>
                 <label class="field-label" for="job-translation-style">
@@ -311,8 +319,8 @@
       >
         <header class="panel-header">
           <div>
-            <h1>Term mappings</h1>
-            <p>Set required translations for archaic or specialist terms.</p>
+            <h1>Glossaries</h1>
+            <p>Create named glossaries of required translations, then choose one on Translate.</p>
           </div>
           <button
             class="secondary-button compact-control"
@@ -321,6 +329,24 @@
             type="button"
           >Add term</button>
         </header>
+
+        <div class="glossary-toolbar">
+          <label class="field-label" for="glossary-select">
+            Edit glossary
+            <select id="glossary-select"><option value="">New glossary</option></select>
+          </label>
+          <label class="field-label" for="glossary-name">
+            Glossary name
+            <input id="glossary-name" type="text" autocomplete="off" placeholder="e.g. Historical medicine">
+          </label>
+          <div class="settings-actions">
+            <button id="new-glossary" class="secondary-button" type="button">New glossary</button>
+            <button id="save-glossary" class="primary-button" type="button">Save glossary</button>
+            <button id="refresh-glossaries" class="text-button" type="button">Refresh</button>
+            <button id="delete-glossary" class="text-button danger-button" type="button" hidden>Delete glossary</button>
+          </div>
+          <p id="glossary-message" class="settings-message" role="status" aria-live="polite">Saved glossaries stay on this computer. Select one on Translate to use it.</p>
+        </div>
 
         <div class="table-card">
           <table aria-describedby="mapping-help mapping-error">
@@ -334,7 +360,7 @@
             <tbody id="mapping-body"></tbody>
           </table>
           <p id="mapping-help" class="empty-message">
-            No term mappings. Add only terms that need a fixed translation.
+            No terms in this glossary. Add terms that need a fixed translation.
           </p>
           <p id="mapping-error" class="field-error" hidden></p>
         </div>

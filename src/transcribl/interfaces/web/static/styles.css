@@ -1687,3 +1687,18 @@ mark.uncertainty-mark:focus-visible {
     transition-duration: 0.01ms !important;
   }
 }
+
+.glossary-toolbar {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.glossary-toolbar .settings-actions,
+.glossary-toolbar .settings-message {
+  grid-column: 1 / -1;
+}
+.glossary-job-choice { margin: 1rem 0; }
+@media (max-width: 640px) {
+  .glossary-toolbar { grid-template-columns: 1fr; }
+}

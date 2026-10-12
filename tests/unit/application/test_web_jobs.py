@@ -419,6 +419,23 @@ def test_web_jobs_run_in_order_and_preserve_distinct_glossary_runs(
     config = config.model_copy(
         update={"paths": config.paths.model_copy(update={"artifacts_dir": tmp_path / "artifacts"})}
     )
+    from transcribl.adapters.storage.glossaries import FilesystemGlossaryRepository
+    from transcribl.application.glossaries import GlossaryService
+    from transcribl.domain.glossaries import GlossaryEntry
+
+    glossaries = GlossaryService(
+        FilesystemGlossaryRepository(config.paths.artifacts_dir),
+        max_entries=500,
+        max_term_characters=500,
+        max_name_characters=100,
+    )
+    historical = glossaries.save(
+        name="Historical",
+        entries=[GlossaryEntry(source_term="Vattersot", target_translation="Dropsy")],
+    )
+    modern = glossaries.save(
+        name="Modern", entries=[GlossaryEntry(source_term="Vattersot", target_translation="Edema")]
+    )
     translator = RecordingTranslator()
 
     @contextmanager
@@ -445,12 +462,12 @@ def test_web_jobs_run_in_order_and_preserve_distinct_glossary_runs(
     first = manager.submit(
         upload_path=_stage_pdf(config.paths.artifacts_dir, "first"),
         display_filename="article.pdf",
-        glossary={"Vattersot": "Dropsy"},
+        glossary=glossaries.resolve(historical.glossary_id, expected_revision=1),
     )
     second = manager.submit(
         upload_path=_stage_pdf(config.paths.artifacts_dir, "second"),
         display_filename="article.pdf",
-        glossary={"Vattersot": "Edema"},
+        glossary=glossaries.resolve(modern.glossary_id, expected_revision=1),
     )
     french_config = config.model_copy(
         update={
@@ -467,9 +484,16 @@ def test_web_jobs_run_in_order_and_preserve_distinct_glossary_runs(
     third = manager.submit(
         upload_path=_stage_pdf(config.paths.artifacts_dir, "third"),
         display_filename="article.pdf",
-        glossary={"Vattersot": "Edema"},
+        glossary=glossaries.resolve(modern.glossary_id, expected_revision=1),
         runtime_config=french_config,
     )
+    glossaries.save(
+        glossary_id=modern.glossary_id,
+        expected_revision=1,
+        name="Modern",
+        entries=[GlossaryEntry(source_term="Vattersot", target_translation="Oedema")],
+    )
+    glossaries.delete(historical.glossary_id, expected_revision=1)
     manager.shutdown()
 
     first_ready = manager.get(first.job_id)

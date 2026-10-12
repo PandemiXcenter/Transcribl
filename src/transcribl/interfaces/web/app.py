@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Annotated
 from uuid import uuid4
 
-from fastapi import Cookie, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
+from fastapi import Cookie, FastAPI, File, Form, Header, HTTPException, Query, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from pydantic import SecretStr, ValidationError
@@ -20,7 +20,9 @@ from starlette.middleware.base import RequestResponseEndpoint
 from transcribl.adapters.export import LatexPdfCompiler
 from transcribl.adapters.secrets import DotenvSecretStore
 from transcribl.adapters.storage import FilesystemArtifactRepository
+from transcribl.adapters.storage.glossaries import FilesystemGlossaryRepository
 from transcribl.application.editorial import EditorialService
+from transcribl.application.glossaries import GlossaryService
 from transcribl.application.web_jobs import (
     WebJobManager,
     WebJobNotFoundError,
@@ -42,12 +44,20 @@ from transcribl.domain.errors import (
     ReplaceAllUnavailableError,
     RevisionConflictError,
 )
+from transcribl.domain.glossaries import (
+    GlossaryConflictError,
+    GlossaryEntry,
+    GlossaryError,
+    GlossaryId,
+    GlossaryNotFoundError,
+    GlossaryStorageError,
+)
 from transcribl.domain.models import DocumentTranslation
 from transcribl.interfaces.web.schemas import (
     ApiKeySettingsRequest,
     BlockRevisionRequest,
     ContinueJobRequest,
-    GlossaryEntry,
+    GlossaryWriteRequest,
     JobTranslationSettings,
     ParagraphRevisionRequest,
     ReviewPositionRequest,
@@ -81,6 +91,12 @@ def create_app(
             api_key=api_key,
             secret_path=local_secret_store.path,
         ),
+    )
+    glossary_service = GlossaryService(
+        FilesystemGlossaryRepository(config.paths.artifacts_dir),
+        max_entries=config.web.max_glossary_entries,
+        max_term_characters=config.web.max_term_characters,
+        max_name_characters=config.web.max_glossary_name_characters,
     )
     local_pdf_compiler = pdf_compiler or LatexPdfCompiler(
         engine=config.pdf_export.latex_engine,
@@ -177,12 +193,58 @@ def create_app(
             "limits": {
                 "max_upload_bytes": config.web.max_upload_bytes,
                 "max_pdf_pages": config.web.max_pdf_pages,
+                "max_glossary_name_characters": config.web.max_glossary_name_characters,
                 "max_glossary_entries": config.web.max_glossary_entries,
                 "max_term_characters": config.web.max_term_characters,
                 "max_instruction_characters": config.web.max_instruction_characters,
                 "status_poll_interval_ms": config.web.status_poll_interval_ms,
             },
         }
+
+    @app.get("/api/glossaries")
+    def list_glossaries() -> dict[str, object]:
+        return {
+            "glossaries": [
+                item.model_dump(mode="json") for item in glossary_service.list_glossaries()
+            ]
+        }
+
+    @app.post("/api/glossaries", status_code=201)
+    def create_glossary(
+        command: GlossaryWriteRequest,
+        at_csrf: Annotated[str | None, Cookie()] = None,
+        x_csrf_token: Annotated[str | None, Header()] = None,
+    ) -> dict[str, object]:
+        _require_csrf(at_csrf, x_csrf_token)
+        return glossary_service.save(
+            name=command.name, entries=command.entries, expected_revision=command.expected_revision
+        ).model_dump(mode="json")
+
+    @app.put("/api/glossaries/{glossary_id}")
+    def update_glossary(
+        glossary_id: GlossaryId,
+        command: GlossaryWriteRequest,
+        at_csrf: Annotated[str | None, Cookie()] = None,
+        x_csrf_token: Annotated[str | None, Header()] = None,
+    ) -> dict[str, object]:
+        _require_csrf(at_csrf, x_csrf_token)
+        return glossary_service.save(
+            name=command.name,
+            entries=command.entries,
+            glossary_id=glossary_id,
+            expected_revision=command.expected_revision,
+        ).model_dump(mode="json")
+
+    @app.delete("/api/glossaries/{glossary_id}", status_code=204)
+    def delete_glossary(
+        glossary_id: GlossaryId,
+        expected_revision: Annotated[int, Query(ge=1)],
+        at_csrf: Annotated[str | None, Cookie()] = None,
+        x_csrf_token: Annotated[str | None, Header()] = None,
+    ) -> Response:
+        _require_csrf(at_csrf, x_csrf_token)
+        glossary_service.delete(glossary_id, expected_revision=expected_revision)
+        return Response(status_code=204)
 
     @app.get("/api/jobs")
     def list_review_jobs() -> dict[str, object]:
@@ -213,6 +275,8 @@ def create_app(
     async def create_job(
         pdf: Annotated[UploadFile, File()],
         glossary: Annotated[str, Form()] = "[]",
+        glossary_id: Annotated[str | None, Form()] = None,
+        glossary_revision: Annotated[int | None, Form()] = None,
         settings: Annotated[str | None, Form()] = None,
         gemini_api_key: Annotated[str | None, Form()] = None,
         api_key: Annotated[str | None, Form()] = None,
@@ -222,6 +286,34 @@ def create_app(
         _require_csrf(at_csrf, x_csrf_token)
         resolved_glossary = _parse_glossary(glossary, config)
         runtime_config, auto_continue = _parse_job_settings(settings, config)
+        if glossary_id:
+            if resolved_glossary:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Select one saved glossary or submit inline mappings, not both",
+                )
+            if glossary_id == "none":
+                if glossary_revision is not None:
+                    raise HTTPException(
+                        status_code=422, detail="No glossary cannot have a revision"
+                    )
+                resolved_glossary = {}
+            else:
+                if glossary_revision is None or glossary_revision < 1:
+                    raise HTTPException(
+                        status_code=422, detail="Select a current glossary revision"
+                    )
+                resolved_glossary = glossary_service.resolve(
+                    glossary_id, expected_revision=glossary_revision
+                )
+            # A named glossary (or None) replaces the configured glossary in full.
+            runtime_config = runtime_config.model_copy(
+                update={
+                    "translation": runtime_config.translation.model_copy(update={"glossary": {}})
+                }
+            )
+        elif glossary_revision is not None:
+            raise HTTPException(status_code=422, detail="A glossary revision requires a glossary")
         if gemini_api_key and runtime_config.provider.name != "gemini":
             raise HTTPException(
                 status_code=422, detail="Gemini key cannot be used for another provider"
@@ -463,6 +555,17 @@ def create_app(
             media_type="application/x-tex; charset=utf-8",
             headers={"Content-Disposition": 'attachment; filename="reviewed-translation.tex"'},
         )
+
+    @app.exception_handler(GlossaryError)
+    def glossary_command_failed(_: Request, exc: GlossaryError) -> JSONResponse:
+        status = 422
+        if isinstance(exc, GlossaryNotFoundError):
+            status = 404
+        elif isinstance(exc, GlossaryConflictError):
+            status = 409
+        elif isinstance(exc, GlossaryStorageError):
+            status = 503
+        return JSONResponse({"detail": str(exc)}, status_code=status)
 
     @app.exception_handler(WebJobNotReadyError)
     def job_not_ready(_: Request, exc: WebJobNotReadyError) -> JSONResponse:

@@ -122,6 +122,7 @@ class WebConfig(ConfigModel):
     max_upload_bytes: int = Field(ge=1_000_000, le=1_000_000_000)
     max_concurrent_jobs: int = Field(ge=1, le=4)
     max_pdf_pages: int = Field(ge=1, le=10_000)
+    max_glossary_name_characters: int = Field(ge=1, le=500)
     max_glossary_entries: int = Field(ge=0, le=10_000)
     max_term_characters: int = Field(ge=1, le=4_000)
     max_instruction_characters: int = Field(ge=1, le=4_000)

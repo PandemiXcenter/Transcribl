@@ -69,7 +69,7 @@ Implemented:
 - TOML-configured context from 0–10 finalized preceding same-run machine page
   translations (default 2), shared by primary and table prompts and constrained
   to current-page-only output;
-- configured glossary plus an authoritative per-job Term mappings table;
+- named local glossaries with per-job selection and immutable term snapshots;
 - per-job input/output languages, style, and allowlisted provider model, with TOML
   defaults (Danish to English in the checked-in config);
 - distinct main/table prompt versions, hashes, provenance, and checkpoint
@@ -79,7 +79,7 @@ Deferred:
 
 - evaluate and tune output on a representative corpus of historical Danish
   material;
-- reusable named glossary files and document-level terminology packages;
+- glossary import/export and document-level terminology packages;
 - optional forward-looking context or a reviewed mechanism for retroactively
   repairing a previous page's trailing fragment;
 - source-coverage and duplicate-block diagnostics;
@@ -150,7 +150,7 @@ Deferred:
 
 Implemented:
 
-- plain tabbed Translate, Term mappings, Settings, and Articles workspace;
+- plain tabbed Translate, Glossaries, Settings, and Articles workspace;
 - laptop PDF selection and language direction on job start;
 - job progress polling;
 - failed-run discovery plus Continue/Cancel controls that preserve and revalidate

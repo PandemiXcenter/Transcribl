@@ -1,5 +1,10 @@
 const state = {
   config: null,
+  glossaries: [],
+  editingGlossaryId: "",
+  editingGlossaryRevision: null,
+  glossaryDirty: false,
+  glossaryBusy: false,
   selectedFile: null,
   jobId: null,
   job: null,
@@ -46,6 +51,14 @@ const fileInput = document.querySelector("#pdf-input");
 const fileDetail = document.querySelector("#file-detail");
 const fileError = document.querySelector("#file-error");
 const dropZone = document.querySelector("#drop-zone");
+const glossarySelect = document.querySelector("#glossary-select");
+const glossaryName = document.querySelector("#glossary-name");
+const jobGlossarySelect = document.querySelector("#job-glossary-select");
+const glossaryMessage = document.querySelector("#glossary-message");
+const newGlossaryButton = document.querySelector("#new-glossary");
+const saveGlossaryButton = document.querySelector("#save-glossary");
+const deleteGlossaryButton = document.querySelector("#delete-glossary");
+const refreshGlossariesButton = document.querySelector("#refresh-glossaries");
 const mappingBody = document.querySelector("#mapping-body");
 const mappingHelp = document.querySelector("#mapping-help");
 const mappingError = document.querySelector("#mapping-error");
@@ -349,6 +362,7 @@ function handleMappingClick(event) {
     return;
   }
   remove.closest("tr")?.remove();
+  markGlossaryDirty();
   setInlineError(mappingError, "");
   updateMappingEmptyState();
 }
@@ -359,6 +373,7 @@ function handleMappingInput(event) {
     return;
   }
   input.removeAttribute("aria-invalid");
+  markGlossaryDirty();
   setInlineError(mappingError, "");
 }
 
@@ -368,7 +383,7 @@ function normalizedGlossaryKey(value) {
 
 function collectGlossary() {
   const rows = [...mappingBody.querySelectorAll("tr[data-testid='mapping-row']")];
-  const glossary = {};
+  const glossary = Object.create(null);
   const seen = new Map();
   const incompleteRows = [];
   const duplicateRows = new Set();
@@ -447,6 +462,139 @@ function collectGlossary() {
   }
   setInlineError(mappingError, "");
   return glossary;
+}
+
+function markGlossaryDirty() {
+  state.glossaryDirty = true;
+  glossaryMessage.textContent = "Unsaved changes. Save this glossary before using the changes.";
+}
+
+function canReplaceGlossaryDraft() {
+  return !state.glossaryDirty || window.confirm("Discard unsaved glossary changes?");
+}
+
+function renderGlossaryChoices(jobChoice = jobGlossarySelect.value) {
+  glossarySelect.replaceChildren(new Option("New glossary", ""));
+  jobGlossarySelect.replaceChildren(new Option("No glossary", "none"));
+  const configuredCount = Object.keys(state.config?.translation?.glossary || {}).length;
+  if (configuredCount) {
+    jobGlossarySelect.append(new Option(`Configured defaults (${configuredCount} terms)`, "configured"));
+  }
+  for (const glossary of state.glossaries) {
+    const label = `${glossary.name} (${glossary.entries.length} terms)`;
+    glossarySelect.append(new Option(label, glossary.glossary_id));
+    jobGlossarySelect.append(new Option(label, glossary.glossary_id));
+  }
+  glossarySelect.value = state.editingGlossaryId;
+  jobGlossarySelect.value = [...jobGlossarySelect.options].some((option) => option.value === jobChoice)
+    ? jobChoice : "none";
+  jobGlossarySelect.disabled = false;
+  updateJobGlossaryHelp();
+}
+
+function updateJobGlossaryHelp() {
+  const glossary = state.glossaries.find((item) => item.glossary_id === jobGlossarySelect.value);
+  document.querySelector("#job-glossary-help").textContent = glossary
+    ? `Uses the saved terms in “${glossary.name}”. Edit it in Glossaries.`
+    : jobGlossarySelect.value === "configured"
+      ? "Uses the glossary in the local configuration."
+      : "No required term translations will be sent. Manage saved glossaries in Glossaries.";
+}
+
+function editGlossary(id) {
+  const glossary = state.glossaries.find((item) => item.glossary_id === id);
+  state.editingGlossaryId = glossary?.glossary_id || "";
+  state.editingGlossaryRevision = glossary?.revision || null;
+  glossarySelect.value = state.editingGlossaryId;
+  glossaryName.value = glossary?.name || "";
+  mappingBody.replaceChildren();
+  for (const entry of glossary?.entries || []) {
+    addMapping(entry.source_term, entry.target_translation, false);
+  }
+  updateMappingEmptyState();
+  deleteGlossaryButton.hidden = !glossary;
+  state.glossaryDirty = false;
+  setInlineError(mappingError, "");
+  glossaryMessage.textContent = glossary
+    ? "Editing this glossary. Choose it on Translate to use its saved terms."
+    : "Name this glossary, add terms, and save it for reuse.";
+}
+
+function setGlossaryBusy(busy) {
+  state.glossaryBusy = busy;
+  for (const control of [glossarySelect, glossaryName, newGlossaryButton, saveGlossaryButton,
+    deleteGlossaryButton, refreshGlossariesButton, addMappingButton]) control.disabled = busy;
+  for (const control of mappingBody.querySelectorAll("input, button")) control.disabled = busy;
+}
+
+async function loadGlossaries({ initial = false } = {}) {
+  if (!initial && !canReplaceGlossaryDraft()) return;
+  setGlossaryBusy(true);
+  try {
+    const payload = await apiRequest("/api/glossaries");
+    state.glossaries = payload.glossaries;
+    const choice = initial && Object.keys(state.config?.translation?.glossary || {}).length
+      ? "configured" : jobGlossarySelect.value;
+    renderGlossaryChoices(choice);
+    editGlossary(state.editingGlossaryId);
+  } catch (error) {
+    setInlineError(mappingError, error.message);
+    showGlobalError(error.message);
+  } finally {
+    setGlossaryBusy(false);
+  }
+}
+
+async function saveGlossary() {
+  const mappings = collectGlossary();
+  const name = glossaryName.value.trim();
+  if (!name || name.length > Number(state.config?.limits?.max_glossary_name_characters)) {
+    setInlineError(mappingError, "Enter a glossary name within the configured length limit.");
+    glossaryName.focus();
+    return;
+  }
+  if (mappings === null) return;
+  if (!Object.keys(mappings).length) {
+    setInlineError(mappingError, "Add at least one term before saving a glossary.");
+    return;
+  }
+  const id = state.editingGlossaryId;
+  setGlossaryBusy(true);
+  try {
+    const saved = await apiRequest(id ? `/api/glossaries/${encodeURIComponent(id)}` : "/api/glossaries", {
+      method: id ? "PUT" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, entries: Object.entries(mappings).map(([source_term, target_translation]) => ({ source_term, target_translation })),
+        expected_revision: state.editingGlossaryRevision }),
+    });
+    state.glossaries = [...state.glossaries.filter((item) => item.glossary_id !== saved.glossary_id), saved]
+      .sort((a, b) => a.name.localeCompare(b.name));
+    renderGlossaryChoices(id ? jobGlossarySelect.value : saved.glossary_id);
+    editGlossary(saved.glossary_id);
+    glossaryMessage.textContent = id ? "Glossary saved." : "Glossary saved and selected for the next translation.";
+  } catch (error) {
+    setInlineError(mappingError, error.message);
+  } finally {
+    setGlossaryBusy(false);
+  }
+}
+
+async function deleteGlossary() {
+  const id = state.editingGlossaryId;
+  if (!id || !window.confirm("Delete this saved glossary? Existing translations keep their original terms.")) return;
+  setGlossaryBusy(true);
+  try {
+    await apiRequest(`/api/glossaries/${encodeURIComponent(id)}?expected_revision=${state.editingGlossaryRevision}`, { method: "DELETE" });
+    state.glossaries = state.glossaries.filter((item) => item.glossary_id !== id);
+    state.editingGlossaryId = "";
+    renderGlossaryChoices();
+    editGlossary("");
+    glossaryMessage.textContent = "Glossary deleted. Existing translations are unchanged.";
+  } catch (error) {
+    setInlineError(mappingError, error.message);
+  } finally {
+    setGlossaryBusy(false);
+  }
 }
 
 function selectedPdf() {
@@ -698,10 +846,7 @@ function populateConfig(config) {
     continuityNotice +
     " Files and review data are stored locally.";
 
-  const glossary = translation.glossary || {};
-  for (const [source, target] of Object.entries(glossary)) {
-    addMapping(asText(source), asText(target), false);
-  }
+  glossaryName.maxLength = Number(config.limits?.max_glossary_name_characters);
   const maxBytes = Number(config.limits?.max_upload_bytes);
   if (Number.isFinite(maxBytes)) {
     fileDetail.textContent = `No file selected · ${formatBytes(maxBytes)} maximum`;
@@ -1083,28 +1228,28 @@ async function startTranslation(event) {
   setInlineError(formError, "");
   const file = selectedPdf();
   const validFile = validatePdf(file);
-  const glossary = collectGlossary();
+  const selectedGlossary = state.glossaries.find((item) => item.glossary_id === jobGlossarySelect.value);
+  if (state.glossaryBusy || jobGlossarySelect.disabled ||
+      (selectedGlossary?.glossary_id === state.editingGlossaryId && state.glossaryDirty)) {
+    setInlineError(formError, "Save or discard the selected glossary's changes before starting.");
+    activateTab("mappings");
+    return;
+  }
   const jobSettings = validateJobSettings();
-  if (!validFile || glossary === null || jobSettings === null) {
+  if (!validFile || jobSettings === null) {
     setInlineError(formError, "Correct the highlighted fields before starting.");
-    if (glossary === null) {
-      activateTab("mappings");
-    }
     return;
   }
 
   setStartBusy(true);
   const body = new FormData();
   body.append("pdf", file, file.name);
-  body.append(
-    "glossary",
-    JSON.stringify(
-      Object.entries(glossary).map(([sourceTerm, targetTranslation]) => ({
-        source_term: sourceTerm,
-        target_translation: targetTranslation,
-      })),
-    ),
-  );
+  if (selectedGlossary) {
+    body.append("glossary_id", selectedGlossary.glossary_id);
+    body.append("glossary_revision", String(selectedGlossary.revision));
+  } else if (jobGlossarySelect.value === "none") {
+    body.append("glossary_id", "none");
+  }
   body.append("settings", JSON.stringify(jobSettings.settings));
   if (jobSettings.sessionKey) {
     body.append("api_key", jobSettings.sessionKey);
@@ -3048,6 +3193,7 @@ async function initialize() {
   try {
     const config = await apiRequest("/api/config");
     populateConfig(config || {});
+    await loadGlossaries({ initial: true });
   } catch (error) {
     apiKeyStatus.textContent = "Configuration unavailable.";
     showGlobalError(error.message);
@@ -3057,7 +3203,19 @@ async function initialize() {
 }
 
 fileInput.addEventListener("change", () => applyFile(fileInput.files?.[0] || null));
-addMappingButton.addEventListener("click", () => addMapping());
+addMappingButton.addEventListener("click", () => { addMapping(); markGlossaryDirty(); });
+glossaryName.addEventListener("input", markGlossaryDirty);
+glossarySelect.addEventListener("change", () => {
+  if (canReplaceGlossaryDraft()) editGlossary(glossarySelect.value);
+  else glossarySelect.value = state.editingGlossaryId;
+});
+newGlossaryButton.addEventListener("click", () => {
+  if (canReplaceGlossaryDraft()) { editGlossary(""); glossaryName.focus(); }
+});
+saveGlossaryButton.addEventListener("click", saveGlossary);
+deleteGlossaryButton.addEventListener("click", deleteGlossary);
+refreshGlossariesButton.addEventListener("click", () => loadGlossaries());
+jobGlossarySelect.addEventListener("change", updateJobGlossaryHelp);
 mappingBody.addEventListener("click", handleMappingClick);
 mappingBody.addEventListener("input", handleMappingInput);
 form.addEventListener("submit", startTranslation);
@@ -3230,7 +3388,7 @@ uncertaintyDialog.addEventListener("cancel", () => {
 });
 
 window.addEventListener("beforeunload", (event) => {
-  if (!state.reviewDrafts.size) {
+  if (!state.reviewDrafts.size && !state.glossaryDirty) {
     return;
   }
   event.preventDefault();

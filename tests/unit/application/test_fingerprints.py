@@ -97,6 +97,31 @@ def test_page_fingerprint_changes_with_footnote_appearance_guidance() -> None:
     assert changed != original
 
 
+def test_selected_glossary_content_invalidates_both_translation_passes() -> None:
+    provider = ProviderDescriptor(provider="fake", model="fake-v1")
+    page_hashes = set()
+    table_hashes = set()
+    for glossary in ({}, {"Vatersot": "Dropsy"}, {"Vatersot": "Edema"}):
+        settings = TranslationSettings(glossary=glossary)
+        page_hashes.add(
+            fingerprints.page_input_fingerprint(
+                page=_page(), settings=settings, provider=provider, prompt="page prompt"
+            )
+        )
+        table_hashes.add(
+            fingerprints.table_input_fingerprint(
+                page=_page(),
+                settings=settings,
+                provider=provider,
+                prompt="table prompt",
+                first_pass_fingerprint=HASH,
+                table_blocks=[_table(SegmentContinuation.COMPLETE)],
+            )
+        )
+
+    assert len(page_hashes) == len(table_hashes) == 3
+
+
 def test_page_fingerprint_changes_with_uncertainty_policy() -> None:
     page = _page()
     provider = ProviderDescriptor(provider="fake", model="fake-v1")

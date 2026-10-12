@@ -9,6 +9,7 @@ from typing import cast
 
 import pytest
 from fastapi.testclient import TestClient
+from httpx2 import Response
 from pydantic import SecretStr
 
 from transcribl.adapters.secrets import DotenvSecretStore
@@ -895,3 +896,109 @@ def test_new_provider_job_and_saved_key_are_isolated(
         assert invalid.status_code == 422
         cleared = client.delete(f"/api/settings/api-key?provider={provider}", headers=headers)
         assert not cleared.json()["saved_on_computer"]
+
+
+def test_glossary_routes_persist_selection_and_protect_mutations(tmp_path: Path) -> None:
+    config = configured_for_tmp(tmp_path)
+    config = config.model_copy(
+        update={
+            "translation": config.translation.model_copy(
+                update={"glossary": {"Baseline": "Default"}}
+            )
+        }
+    )
+    manager = RecordingJobManager()
+
+    def app_client() -> TestClient:
+        return TestClient(create_app(config, job_manager=cast(WebJobManager, manager)))
+
+    with app_client() as client:
+        html = client.get("/").text
+        assert ">Glossaries<" in html and "Term mappings" not in html
+        assert 'id="job-glossary-select"' in html
+        headers = {"X-CSRF-Token": client.cookies["at_csrf"]}
+        command = {
+            "name": "Historical",
+            "entries": [{"source_term": "Vattersot", "target_translation": "Dropsy"}],
+        }
+        assert client.post("/api/glossaries", json=command).status_code == 403
+        created = client.post("/api/glossaries", json=command, headers=headers)
+        assert created.status_code == 201
+        saved = created.json()
+        url = f"/api/glossaries/{saved['glossary_id']}"
+        assert "path" not in saved
+        assert created.headers["Cache-Control"] == "no-store"
+        assert client.put(url, json={**command, "expected_revision": 1}).status_code == 403
+        assert client.delete(url + "?expected_revision=1").status_code == 403
+        assert client.put(url, json=command, headers=headers).status_code == 422
+
+        def submit(data: dict[str, str]) -> Response:
+            return client.post(
+                "/api/jobs",
+                files={"pdf": ("test.pdf", b"%PDF-1.7", "application/pdf")},
+                data=data,
+                headers=headers,
+            )
+
+        response = submit({"glossary_id": saved["glossary_id"], "glossary_revision": "1"})
+        assert response.status_code == 202
+        assert manager.submissions[-1][2] == {"Vattersot": "Dropsy"}
+        assert manager.submissions[-1][4].translation.glossary == {}
+        assert submit({"glossary_id": "none"}).status_code == 202
+        assert (
+            manager.submissions[-1][2] == {}
+            and manager.submissions[-1][4].translation.glossary == {}
+        )
+        assert submit({}).status_code == 202
+        assert manager.submissions[-1][4].translation.glossary == {"Baseline": "Default"}
+        changed = {
+            "name": "Modern",
+            "entries": [{"source_term": "Vattersot", "target_translation": "Edema"}],
+            "expected_revision": 1,
+        }
+        updated = client.put(url, json=changed, headers=headers)
+        assert updated.status_code == 200 and updated.json()["revision"] == 2
+        assert client.put(url, json=changed, headers=headers).status_code == 409
+        assert (
+            submit({"glossary_id": saved["glossary_id"], "glossary_revision": "1"}).status_code
+            == 409
+        )
+        assert submit({"glossary_id": saved["glossary_id"]}).status_code == 422
+        assert (
+            submit({"glossary_id": "none", "glossary": json.dumps(command["entries"])}).status_code
+            == 422
+        )
+        assert submit({"glossary_id": "../outside", "glossary_revision": "1"}).status_code == 404
+        assert len(manager.submissions) == 3
+        assert manager.submissions[0][2] == {"Vattersot": "Dropsy"}
+    with app_client() as restarted:
+        restarted.get("/")
+        headers = {"X-CSRF-Token": restarted.cookies["at_csrf"]}
+        assert restarted.get("/api/glossaries").json()["glossaries"][0]["name"] == "Modern"
+        assert restarted.delete(url + "?expected_revision=1", headers=headers).status_code == 409
+        assert restarted.delete(url + "?expected_revision=2", headers=headers).status_code == 204
+        assert restarted.get("/api/glossaries").json() == {"glossaries": []}
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        {"name": "Bad", "entries": [], "unknown": True},
+        {"name": "Bad", "entries": []},
+        {"name": "N" * 101, "entries": [{"source_term": "A", "target_translation": "B"}]},
+        {"name": "Bad", "entries": [{"source_term": "A" * 501, "target_translation": "B"}]},
+    ],
+)
+def test_glossary_requests_enforce_strict_models_and_configured_limits(
+    tmp_path: Path, command: dict[str, object]
+) -> None:
+    manager = RecordingJobManager()
+    with TestClient(
+        create_app(configured_for_tmp(tmp_path), job_manager=cast(WebJobManager, manager))
+    ) as client:
+        client.get("/")
+        response = client.post(
+            "/api/glossaries", json=command, headers={"X-CSRF-Token": client.cookies["at_csrf"]}
+        )
+        assert response.status_code == 422
+        assert client.get("/api/glossaries").json() == {"glossaries": []}
