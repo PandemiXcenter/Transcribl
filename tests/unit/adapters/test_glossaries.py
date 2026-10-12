@@ -135,7 +135,7 @@ def test_concurrent_updates_allow_only_one_writer(tmp_path: Path) -> None:
 def test_atomic_failure_preserves_catalog_and_cleans_temp_file(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import transcribl.adapters.storage.glossaries as storage
+    import transcribl.adapters.storage.atomic as storage
 
     library = service(tmp_path)
     saved = library.save(name="Medical", entries=entries())

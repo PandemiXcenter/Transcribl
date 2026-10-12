@@ -13,12 +13,12 @@ from httpx2 import Response
 from pydantic import SecretStr
 
 from transcribl.adapters.secrets import DotenvSecretStore
-from transcribl.application.web_jobs import (
-    WebJobManager,
-    WebJobNotFoundError,
-    WebJobSnapshot,
-    WebJobStatus,
-    WebReviewSnapshot,
+from transcribl.application.jobs.manager import JobManager
+from transcribl.application.jobs.records import (
+    JobNotFoundError,
+    JobSnapshot,
+    LocalJobStatus,
+    ReviewSnapshot,
 )
 from transcribl.config import ProjectConfig, load_project_config
 from transcribl.interfaces.web import create_app
@@ -29,7 +29,7 @@ def test_settings_are_persistent_validated_and_snapshotted_per_job(tmp_path: Pat
     manager = RecordingJobManager()
 
     def client_for_app() -> TestClient:
-        return TestClient(create_app(config, job_manager=cast(WebJobManager, manager)))
+        return TestClient(create_app(config, job_manager=cast(JobManager, manager)))
 
     with client_for_app() as client:
         client.get("/session")
@@ -116,9 +116,9 @@ class RecordingJobManager:
                 bool,
             ]
         ] = []
-        self.snapshot = WebJobSnapshot(
+        self.snapshot = JobSnapshot(
             job_id="a" * 32,
-            status=WebJobStatus.QUEUED,
+            status=LocalJobStatus.QUEUED,
             filename="article.pdf",
             current_page=0,
             total_pages=None,
@@ -128,9 +128,9 @@ class RecordingJobManager:
         self.deleted_reviews: list[str] = []
         self.continued_keys: list[SecretStr | None] = []
         self.cancelled_jobs: list[str] = []
-        self.recoverable_snapshot = WebJobSnapshot(
+        self.recoverable_snapshot = JobSnapshot(
             job_id="c" * 32,
-            status=WebJobStatus.FAILED,
+            status=LocalJobStatus.FAILED,
             filename="stopped.pdf",
             current_page=53,
             total_pages=95,
@@ -147,7 +147,7 @@ class RecordingJobManager:
         runtime_config: ProjectConfig,
         api_key: SecretStr | None,
         auto_continue: bool,
-    ) -> WebJobSnapshot:
+    ) -> JobSnapshot:
         self.submissions.append(
             (
                 upload_path.read_bytes(),
@@ -162,16 +162,16 @@ class RecordingJobManager:
         shutil.rmtree(upload_path.parent)
         return self.snapshot
 
-    def get(self, job_id: str) -> WebJobSnapshot:
+    def get(self, job_id: str) -> JobSnapshot:
         if job_id != self.snapshot.job_id:
-            raise WebJobNotFoundError("Translation job was not found")
+            raise JobNotFoundError("Translation job was not found")
         return self.snapshot
 
-    def list_reviews(self) -> list[WebReviewSnapshot]:
+    def list_reviews(self) -> list[ReviewSnapshot]:
         return [
-            WebReviewSnapshot(
+            ReviewSnapshot(
                 job_id="b" * 32,
-                status=WebJobStatus.READY,
+                status=LocalJobStatus.READY,
                 filename="completed.pdf",
                 page_count=95,
                 continue_page=42,
@@ -183,7 +183,7 @@ class RecordingJobManager:
             )
         ]
 
-    def list_recoverable_jobs(self) -> list[WebJobSnapshot]:
+    def list_recoverable_jobs(self) -> list[JobSnapshot]:
         return [self.recoverable_snapshot]
 
     def continue_job(
@@ -191,29 +191,29 @@ class RecordingJobManager:
         job_id: str,
         *,
         api_key: SecretStr | None = None,
-    ) -> WebJobSnapshot:
+    ) -> JobSnapshot:
         if job_id != self.recoverable_snapshot.job_id:
-            raise WebJobNotFoundError("Translation job was not found")
+            raise JobNotFoundError("Translation job was not found")
         self.continued_keys.append(api_key)
         return replace(
             self.recoverable_snapshot,
-            status=WebJobStatus.QUEUED,
+            status=LocalJobStatus.QUEUED,
             error=None,
         )
 
-    def cancel_job(self, job_id: str) -> WebJobSnapshot:
+    def cancel_job(self, job_id: str) -> JobSnapshot:
         if job_id != self.recoverable_snapshot.job_id:
-            raise WebJobNotFoundError("Translation job was not found")
+            raise JobNotFoundError("Translation job was not found")
         self.cancelled_jobs.append(job_id)
         return replace(
             self.recoverable_snapshot,
-            status=WebJobStatus.CANCELLED,
+            status=LocalJobStatus.CANCELLED,
             error="Translation paused. Completed page checkpoints were kept.",
         )
 
     def delete_review(self, translation_run_id: str) -> None:
         if translation_run_id != "b" * 32:
-            raise WebJobNotFoundError("Translation job was not found")
+            raise JobNotFoundError("Translation job was not found")
         self.deleted_reviews.append(translation_run_id)
 
     def shutdown(self) -> None:
@@ -230,7 +230,7 @@ def configured_for_tmp(tmp_path: Path) -> ProjectConfig:
 def test_index_and_public_config_never_expose_secret(tmp_path: Path) -> None:
     config = configured_for_tmp(tmp_path)
     manager = RecordingJobManager()
-    app = create_app(config, job_manager=cast(WebJobManager, manager))
+    app = create_app(config, job_manager=cast(JobManager, manager))
 
     with TestClient(app) as client:
         index = client.get("/")
@@ -282,7 +282,7 @@ def test_blank_environment_key_does_not_prevent_settings_page(
     manager = RecordingJobManager()
     app = create_app(
         config,
-        job_manager=cast(WebJobManager, manager),
+        job_manager=cast(JobManager, manager),
         secret_store=DotenvSecretStore(tmp_path / ".env"),
     )
 
@@ -296,7 +296,7 @@ def test_blank_environment_key_does_not_prevent_settings_page(
 def test_review_catalog_returns_stable_completed_runs(tmp_path: Path) -> None:
     config = configured_for_tmp(tmp_path)
     manager = RecordingJobManager()
-    app = create_app(config, job_manager=cast(WebJobManager, manager))
+    app = create_app(config, job_manager=cast(JobManager, manager))
 
     with TestClient(app) as client:
         response = client.get("/api/jobs")
@@ -315,6 +315,7 @@ def test_review_catalog_returns_stable_completed_runs(tmp_path: Path) -> None:
                 "review_complete": False,
                 "translation_run_id": "b" * 32,
                 "updated_at": "2026-08-04T12:00:00Z",
+                "cost": None,
             }
         ]
     }
@@ -325,7 +326,7 @@ def test_failed_job_commands_require_csrf_and_never_return_api_key(
 ) -> None:
     config = configured_for_tmp(tmp_path)
     manager = RecordingJobManager()
-    app = create_app(config, job_manager=cast(WebJobManager, manager))
+    app = create_app(config, job_manager=cast(JobManager, manager))
     run_id = manager.recoverable_snapshot.job_id
 
     with TestClient(app) as client:
@@ -361,7 +362,7 @@ def test_failed_job_commands_require_csrf_and_never_return_api_key(
 def test_article_delete_requires_csrf_and_calls_manager(tmp_path: Path) -> None:
     config = configured_for_tmp(tmp_path)
     manager = RecordingJobManager()
-    app = create_app(config, job_manager=cast(WebJobManager, manager))
+    app = create_app(config, job_manager=cast(JobManager, manager))
     run_id = "b" * 32
 
     with TestClient(app) as client:
@@ -380,7 +381,7 @@ def test_article_delete_requires_csrf_and_calls_manager(tmp_path: Path) -> None:
 def test_upload_requires_csrf_and_confines_hostile_filename(tmp_path: Path) -> None:
     config = configured_for_tmp(tmp_path)
     manager = RecordingJobManager()
-    app = create_app(config, job_manager=cast(WebJobManager, manager))
+    app = create_app(config, job_manager=cast(JobManager, manager))
     file_payload = b"%PDF-1.7\nsynthetic"
     glossary = '[{"source_term":"Vattersot","target_translation":"Dropsy"}]'
 
@@ -421,7 +422,7 @@ def test_invalid_pdf_and_duplicate_glossary_fail_before_submission(
 ) -> None:
     config = configured_for_tmp(tmp_path)
     manager = RecordingJobManager()
-    app = create_app(config, job_manager=cast(WebJobManager, manager))
+    app = create_app(config, job_manager=cast(JobManager, manager))
 
     with TestClient(app) as client:
         client.get("/")
@@ -456,7 +457,7 @@ def test_job_uses_selected_languages_model_style_and_session_key(
 ) -> None:
     config = configured_for_tmp(tmp_path)
     manager = RecordingJobManager()
-    app = create_app(config, job_manager=cast(WebJobManager, manager))
+    app = create_app(config, job_manager=cast(JobManager, manager))
     settings = {
         "model": "gemini-3.8-flash",
         "source_language": "Latin",
@@ -506,7 +507,7 @@ def test_job_uses_selected_languages_model_style_and_session_key(
 def test_job_rejects_model_outside_config_allowlist(tmp_path: Path) -> None:
     config = configured_for_tmp(tmp_path)
     manager = RecordingJobManager()
-    app = create_app(config, job_manager=cast(WebJobManager, manager))
+    app = create_app(config, job_manager=cast(JobManager, manager))
 
     with TestClient(app) as client:
         client.get("/")
@@ -541,7 +542,7 @@ def test_job_maps_uncertainty_off_to_legacy_flag_and_keeps_configured_level(
 ) -> None:
     config = configured_for_tmp(tmp_path)
     manager = RecordingJobManager()
-    app = create_app(config, job_manager=cast(WebJobManager, manager))
+    app = create_app(config, job_manager=cast(JobManager, manager))
     settings = {
         "model": config.provider.gemini.model,
         "source_language": "Danish",
@@ -580,7 +581,7 @@ def test_job_rejects_uncertainty_level_outside_configured_choices(tmp_path: Path
         }
     )
     manager = RecordingJobManager()
-    app = create_app(config, job_manager=cast(WebJobManager, manager))
+    app = create_app(config, job_manager=cast(JobManager, manager))
 
     with TestClient(app) as client:
         client.get("/")
@@ -618,7 +619,7 @@ def test_job_rejects_footnote_guidance_above_configured_limit(tmp_path: Path) ->
         update={"web": config.web.model_copy(update={"max_instruction_characters": 10})}
     )
     manager = RecordingJobManager()
-    app = create_app(config, job_manager=cast(WebJobManager, manager))
+    app = create_app(config, job_manager=cast(JobManager, manager))
 
     with TestClient(app) as client:
         client.get("/")
@@ -653,7 +654,7 @@ def test_job_rejects_uncertainty_instructions_above_configured_limit(tmp_path: P
         update={"web": config.web.model_copy(update={"max_instruction_characters": 10})}
     )
     manager = RecordingJobManager()
-    app = create_app(config, job_manager=cast(WebJobManager, manager))
+    app = create_app(config, job_manager=cast(JobManager, manager))
 
     with TestClient(app) as client:
         client.get("/")
@@ -697,7 +698,7 @@ def test_job_rejects_out_of_range_context_and_render_settings(
 ) -> None:
     config = configured_for_tmp(tmp_path)
     manager = RecordingJobManager()
-    app = create_app(config, job_manager=cast(WebJobManager, manager))
+    app = create_app(config, job_manager=cast(JobManager, manager))
 
     with TestClient(app) as client:
         client.get("/")
@@ -735,7 +736,7 @@ def test_settings_can_keep_key_for_session_or_save_and_clear_it_locally(
     store = DotenvSecretStore(dotenv_path)
     app = create_app(
         config,
-        job_manager=cast(WebJobManager, manager),
+        job_manager=cast(JobManager, manager),
         secret_store=store,
     )
 
@@ -792,7 +793,7 @@ def test_settings_can_keep_key_for_session_or_save_and_clear_it_locally(
 def test_unknown_job_does_not_create_artifact_directory(tmp_path: Path) -> None:
     config = configured_for_tmp(tmp_path)
     manager = RecordingJobManager()
-    app = create_app(config, job_manager=cast(WebJobManager, manager))
+    app = create_app(config, job_manager=cast(JobManager, manager))
 
     with TestClient(app) as client:
         response = client.get(f"/api/jobs/{'b' * 32}")
@@ -810,7 +811,7 @@ def test_new_provider_job_and_saved_key_are_isolated(
     config = configured_for_tmp(tmp_path)
     manager = RecordingJobManager()
     store = DotenvSecretStore(tmp_path / ".env")
-    app = create_app(config, job_manager=cast(WebJobManager, manager), secret_store=store)
+    app = create_app(config, job_manager=cast(JobManager, manager), secret_store=store)
     with TestClient(app) as client:
         client.get("/")
         headers = {"X-CSRF-Token": client.cookies["at_csrf"]}
@@ -860,7 +861,7 @@ def test_glossary_routes_persist_selection_and_protect_mutations(tmp_path: Path)
     manager = RecordingJobManager()
 
     def app_client() -> TestClient:
-        return TestClient(create_app(config, job_manager=cast(WebJobManager, manager)))
+        return TestClient(create_app(config, job_manager=cast(JobManager, manager)))
 
     with app_client() as client:
         client.get("/session")
@@ -944,7 +945,7 @@ def test_glossary_requests_enforce_strict_models_and_configured_limits(
 ) -> None:
     manager = RecordingJobManager()
     with TestClient(
-        create_app(configured_for_tmp(tmp_path), job_manager=cast(WebJobManager, manager))
+        create_app(configured_for_tmp(tmp_path), job_manager=cast(JobManager, manager))
     ) as client:
         client.get("/")
         response = client.post(
@@ -952,3 +953,84 @@ def test_glossary_requests_enforce_strict_models_and_configured_limits(
         )
         assert response.status_code == 422
         assert client.get("/api/glossaries").json() == {"glossaries": []}
+
+
+def test_pdf_info_counts_locally_and_always_cleans_staging(tmp_path: Path) -> None:
+    from io import BytesIO
+
+    from pypdf import PdfWriter
+
+    config = configured_for_tmp(tmp_path)
+    config = config.model_copy(update={"web": config.web.model_copy(update={"max_pdf_pages": 2})})
+    manager = RecordingJobManager()
+    app = create_app(config, job_manager=cast(JobManager, manager))
+    writer = PdfWriter()
+    for _ in range(2):
+        writer.add_blank_page(width=100, height=100)
+    data = BytesIO()
+    writer.write(data)
+    files = {"pdf": ("../../two.pdf", data.getvalue(), "application/pdf")}
+    with TestClient(app) as client:
+        assert client.post("/api/pdf-info", files=files).status_code == 403
+        client.get("/session")
+        headers = {"X-CSRF-Token": client.cookies["at_csrf"]}
+        response = client.post("/api/pdf-info", files=files, headers=headers)
+        assert response.status_code == 200
+        assert response.json() == {"page_count": 2}
+        assert response.headers["cache-control"] == "no-store"
+        for content in (b"not a pdf", b"%PDF-1.7 invalid"):
+            bad = client.post("/api/pdf-info", files={"pdf": ("bad.pdf", content)}, headers=headers)
+            assert bad.status_code in (415, 422)
+        writer.add_blank_page(width=100, height=100)
+        too_large = BytesIO()
+        writer.write(too_large)
+        assert (
+            client.post(
+                "/api/pdf-info", files={"pdf": ("large.pdf", too_large.getvalue())}, headers=headers
+            ).status_code
+            == 422
+        )
+        writer.encrypt("secret-password")
+        encrypted = BytesIO()
+        writer.write(encrypted)
+        assert (
+            client.post(
+                "/api/pdf-info",
+                files={"pdf": ("locked.pdf", encrypted.getvalue())},
+                headers=headers,
+            ).status_code
+            == 422
+        )
+    assert not manager.submissions
+    assert not list((config.paths.artifacts_dir / ".uploads").iterdir())
+
+
+def test_api_key_defaults_follow_configured_provider(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for provider in ("gemini", "openai", "anthropic"):
+        monkeypatch.delenv(f"{provider.upper()}_API_KEY", raising=False)
+    config = configured_for_tmp(tmp_path)
+    config = config.model_copy(
+        update={"provider": config.provider.model_copy(update={"name": "openai"})}
+    )
+    store = DotenvSecretStore(tmp_path / ".env")
+    with TestClient(
+        create_app(config, job_manager=cast(JobManager, RecordingJobManager()), secret_store=store)
+    ) as client:
+        client.get("/session")
+        headers = {"X-CSRF-Token": client.cookies["at_csrf"]}
+        response = client.post(
+            "/api/settings/api-key",
+            headers=headers,
+            json={"api_key": "test-openai-only", "save_on_computer": True},
+        )
+        assert response.status_code == 200
+        assert store.has_api_key("openai")
+        assert not store.has_api_key("gemini")
+        public = client.get("/api/config").json()
+        assert public["api_key_configured"]
+        assert public["api_key_saved_on_computer"]
+        assert "test-openai-only" not in str(public)
+        assert client.delete("/api/settings/api-key", headers=headers).status_code == 200
+        assert not store.has_api_key("openai")

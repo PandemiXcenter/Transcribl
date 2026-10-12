@@ -5,7 +5,8 @@ from typing import Any
 import pytest
 from google.genai import errors, types
 
-from transcribl.adapters.llm.gemini import GeminiPageTranslator, GeminiRequestError
+from transcribl.adapters.llm.base import ProviderRequestError
+from transcribl.adapters.llm.providers.google import GeminiPageTranslator
 from transcribl.domain.enums import BlockType, SegmentContinuation
 from transcribl.domain.models import (
     GeneratedBlock,
@@ -42,7 +43,10 @@ class FakeClient:
 
 
 @pytest.mark.parametrize("thinking", ["default", "low", "medium", "high"])
-def test_gemini_adapter_maps_multimodal_structured_output(tmp_path: Path, thinking: str) -> None:
+@pytest.mark.parametrize("thoughts", [None, 0, 30])
+def test_gemini_adapter_maps_multimodal_structured_output(
+    tmp_path: Path, thinking: str, thoughts: int | None
+) -> None:
     image = tmp_path / "page.png"
     image.write_bytes(b"not-a-real-png")
     payload = GeneratedPagePayload(
@@ -64,6 +68,7 @@ def test_gemini_adapter_maps_multimodal_structured_output(tmp_path: Path, thinki
         usage_metadata=SimpleNamespace(
             prompt_token_count=101,
             candidates_token_count=22,
+            thoughts_token_count=thoughts,
         ),
     )
     client = FakeClient(response)
@@ -98,11 +103,13 @@ def test_gemini_adapter_maps_multimodal_structured_output(tmp_path: Path, thinki
     assert result.payload == payload
     assert result.response_id == "response-123"
     assert result.input_tokens == 101
+    assert result.output_tokens == 22 + (thoughts or 0)
     assert translator.descriptor.configuration == {
         **({"thinking_level": thinking} if thinking != "default" else {}),
         "api_version": "v1",
         "request_timeout_seconds": 120,
         "request_attempts": 3,
+        "output_token_accounting": "includes_reasoning",
         "max_inline_request_bytes": 19_000_000,
     }
     assert translator.descriptor.semantic_configuration == {
@@ -392,7 +399,7 @@ def test_gemini_adapter_maps_provider_errors_without_raw_details(
         client=FakeClient(provider_error),
     )
 
-    with pytest.raises(GeminiRequestError) as error:
+    with pytest.raises(ProviderRequestError) as error:
         translator.translate_page(
             PageTranslationRequest(
                 original_page_number=1,
@@ -434,7 +441,7 @@ def test_gemini_adapter_does_not_expose_untrusted_provider_status(tmp_path: Path
         ),
     )
 
-    with pytest.raises(GeminiRequestError) as error:
+    with pytest.raises(ProviderRequestError) as error:
         translator.translate_page(
             PageTranslationRequest(
                 original_page_number=1,

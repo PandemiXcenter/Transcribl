@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from transcribl.application.compile_markdown import compile_markdown
+from transcribl.application.exporters.markdown import compile_markdown
 from transcribl.domain.enums import (
     BlockType,
     ExtractionStatus,

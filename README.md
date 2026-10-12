@@ -216,6 +216,40 @@ task interruption. This is filesystem discovery, not a database or durable task
 queue. There is no authentication or remote deployment support, so do not expose
 the server on a network.
 
+### Translation costs
+
+Selecting a PDF counts its physical pages locally and shows an approximate USD
+cost before submission. Changing the model recalculates it without a provider
+call. The estimate uses average recorded input/output tokens per completed page,
+including table passes, multiplied by the selected model's rates and PDF page
+count. It prefers the same model and thinking level, then the same model,
+provider, or all-model history. Five matching pages are required before narrowing
+the sample; the most recent 1,000 matching pages are used. Both limits live in
+`[costs]` in TOML. Newly completed runs improve subsequent estimates automatically.
+
+Finished jobs and the Articles catalog show **Recorded cost**, calculated from
+that run's successful main and table requests. Expand the catalog cost for token
+totals and pricing details. Existing completed runs are included after restart;
+canonical documents and editorial revisions are never rewritten for pricing.
+Prices are display projections from the current TOML price table, so updating
+that table can change displayed historical costs. This is not a billing ledger.
+
+Rates were checked on October 12, 2026 against the official
+[OpenAI](https://developers.openai.com/api/docs/pricing),
+[Anthropic](https://platform.claude.com/docs/en/about-claude/pricing), and
+[Google](https://ai.google.dev/gemini-api/docs/pricing) price lists. Each configured
+rate includes its source and verification date. Gemini introductory rates expire
+December 31, 2026; update the table before estimating later runs. The legacy
+Gemini 3.6 entry prices old runs only and does not make it selectable.
+
+Costs use standard paid-tier rates, excluding unrecorded retries, cache discounts,
+free allowances and taxes. OpenAI uses short-context rates; long-context premiums
+are not included. Haiku's prompt-length tier is applied separately to each
+request. Older Gemini usage excludes thinking tokens; new Gemini records include
+them. Page density, language, image resolution, prompts and thinking settings can
+change usage. Missing usage/history/pricing shows **unavailable**, never a
+misleading zero. No document content is sent anywhere to calculate either cost.
+
 ## Desktop distributions
 
 Builds are owned exclusively by the **Desktop builds** GitHub Actions workflow
@@ -530,18 +564,18 @@ rather than being attached to a guessed run.
 ├── src/transcribl/
 │   ├── cli.py                      # command inputs and local app launchers
 │   ├── composition.py              # shared adapter/application wiring
-│   ├── config.py                   # TOML validation + API-key loading
+│   ├── config/                     # strict TOML sections + resolved defaults
 │   ├── domain/                     # Pydantic contracts, editorial views, errors
 │   ├── ports/                      # extractor, provider, artifact/revision ports
-│   ├── application/                # pipeline, jobs, editorial service, export
+│   ├── application/                # translation/, jobs/, review/, exporters/
 │   ├── adapters/
 │   │   ├── extraction/             # MarkItDown + PDFium page pairing
 │   │   ├── export/                 # bounded local XeLaTeX compilation
-│   │   ├── llm/                    # Provider SDK boundaries
-│   │   ├── secrets/                # narrow local GEMINI_API_KEY persistence
-│   │   └── storage/                # atomic machine and revision artifacts
-│   ├── interfaces/web/             # Strict local FastAPI application API
-│   ├── interfaces/desktop/         # NiceGUI controls + editorial component
+│   │   ├── llm/                    # shared handling + isolated providers/ SDKs
+│   │   ├── secrets/                # provider keys + environment resolution
+│   │   └── storage/                # artifacts, atomic writes, read-only migrations
+│   ├── interfaces/web/             # strict API feature routers + HTTP policy
+│   ├── interfaces/desktop/         # composed panels + modular Articles editor
 │   └── prompts/                    # versioned prompt resources
 └── tests/
     ├── unit/
@@ -551,8 +585,12 @@ rather than being attached to a guessed run.
 
 The dependency direction is interface → application → domain/ports, with adapters
 implementing the ports. The web interface and CLI share composition and
-application services; browser code never calls Gemini or MarkItDown directly and
+application services; browser code never calls provider SDKs or MarkItDown directly and
 never reconstructs metadata from Markdown.
+
+Architecture tests guard core imports, SDK isolation and acyclic module graphs.
+Release smoke checks verify nested editor assets in both desktop builds. Existing
+artifact schemas, prompts, provider IDs and saved key locations remain compatible.
 
 See [architecture.md](docs/architecture.md) for the detailed model and
 [roadmap.md](docs/roadmap.md) for implemented scope and deliberately deferred
@@ -568,7 +606,7 @@ uv run mypy src tests
 uv lock --check
 ```
 
-Normal tests never contact Gemini. They generate synthetic PDFs in temporary
+Normal tests never contact external providers. They generate synthetic PDFs in temporary
 directories, mock provider responses, and use fake providers for end-to-end
 execution. Interface tests use an in-process FastAPI client and fake job/provider
 boundaries. NiceGUI simulation tests also exercise desktop selections, credentials,

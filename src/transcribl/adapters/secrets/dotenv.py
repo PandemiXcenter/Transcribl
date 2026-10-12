@@ -39,15 +39,6 @@ class DotenvSecretStore:
     def path_for(self, provider: ProviderName) -> Path:
         return self._path if provider == "gemini" else self._path.with_name(".provider-keys")
 
-    def has_gemini_api_key(self) -> bool:
-        return self.has_api_key("gemini")
-
-    def save_gemini_api_key(self, value: SecretStr | str) -> None:
-        self.save_api_key("gemini", value)
-
-    def clear_gemini_api_key(self) -> bool:
-        return self.clear_api_key("gemini")
-
     def has_api_key(self, provider: ProviderName) -> bool:
         """Report whether the effective saved definition has a nonblank value."""
 

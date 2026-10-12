@@ -1,37 +1,27 @@
 from __future__ import annotations
 
 import json
-from copy import deepcopy
-from dataclasses import dataclass
-from typing import Any, cast
+from typing import Any
 
 from google import genai
 from google.genai import errors, types
 from pydantic import BaseModel
 
-from transcribl.domain.models import GeneratedPagePayload, GeneratedTablePayload
+from transcribl.adapters.llm.base import (
+    MultimodalRequest,
+    PageTranslatorAdapter,
+    ProviderRequestError,
+    StructuredResponse,
+    inline_request_size,
+)
+from transcribl.adapters.llm.validation import repair_page_continuations
+from transcribl.domain.models import GeneratedPagePayload
 from transcribl.ports.translation import (
-    PageTranslationRequest,
     ProviderDescriptor,
-    ProviderResult,
-    TableReconstructionRequest,
-    TableReconstructionResult,
 )
 
-MultimodalRequest = PageTranslationRequest | TableReconstructionRequest
 
-
-@dataclass(frozen=True, slots=True)
-class _StructuredResponse[PayloadT: BaseModel]:
-    payload: PayloadT
-    response_id: str | None
-    input_tokens: int | None
-    output_tokens: int | None
-
-
-class GeminiPageTranslator:
-    """Gemini multimodal structured-output adapter."""
-
+class GeminiPageTranslator(PageTranslatorAdapter):
     def __init__(
         self,
         *,
@@ -71,36 +61,10 @@ class GeminiPageTranslator:
                 **semantics,
                 "request_timeout_seconds": self._timeout_seconds,
                 "request_attempts": self._attempts,
+                "output_token_accounting": "includes_reasoning",
                 "max_inline_request_bytes": self._max_inline_request_bytes,
             },
             semantic_configuration=semantics,
-        )
-
-    def translate_page(self, request: PageTranslationRequest) -> ProviderResult:
-        response = self._generate_structured(
-            request=request,
-            payload_model=GeneratedPagePayload,
-        )
-        return ProviderResult(
-            payload=response.payload,
-            response_id=response.response_id,
-            input_tokens=response.input_tokens,
-            output_tokens=response.output_tokens,
-        )
-
-    def reconstruct_tables(
-        self,
-        request: TableReconstructionRequest,
-    ) -> TableReconstructionResult:
-        response = self._generate_structured(
-            request=request,
-            payload_model=GeneratedTablePayload,
-        )
-        return TableReconstructionResult(
-            payload=response.payload,
-            response_id=response.response_id,
-            input_tokens=response.input_tokens,
-            output_tokens=response.output_tokens,
         )
 
     def _generate_structured[PayloadT: BaseModel](
@@ -108,7 +72,7 @@ class GeminiPageTranslator:
         *,
         request: MultimodalRequest,
         payload_model: type[PayloadT],
-    ) -> _StructuredResponse[PayloadT]:
+    ) -> StructuredResponse[PayloadT]:
         image_bytes = request.image_path.read_bytes()
         self._guard_inline_request_size(image_bytes=image_bytes, prompt=request.prompt)
         content = types.Content(
@@ -138,7 +102,7 @@ class GeminiPageTranslator:
                 ),
             )
         except errors.APIError as exc:
-            raise GeminiRequestError(_safe_api_error_message(exc)) from exc
+            raise ProviderRequestError(_safe_api_error_message(exc)) from exc
 
         parsed: object = response.parsed
         if parsed is None:
@@ -146,93 +110,28 @@ class GeminiPageTranslator:
                 raise ValueError("Gemini returned neither parsed structured data nor response text")
             parsed = json.loads(response.text)
         if payload_model is GeneratedPagePayload:
-            parsed = _repair_impossible_page_continuations(parsed)
+            parsed = repair_page_continuations(parsed)
         payload = payload_model.model_validate(parsed)
 
         usage = response.usage_metadata
-        return _StructuredResponse(
+        return StructuredResponse(
             payload=payload,
             response_id=response.response_id,
             input_tokens=usage.prompt_token_count if usage is not None else None,
-            output_tokens=usage.candidates_token_count if usage is not None else None,
+            output_tokens=(
+                usage.candidates_token_count + (getattr(usage, "thoughts_token_count", 0) or 0)
+                if usage is not None and usage.candidates_token_count is not None
+                else None
+            ),
         )
 
     def _guard_inline_request_size(self, *, image_bytes: bytes, prompt: str) -> None:
-        encoded_image_bytes = 4 * ((len(image_bytes) + 2) // 3)
-        estimated_request_bytes = encoded_image_bytes + len(prompt.encode("utf-8")) + 16_384
+        estimated_request_bytes = inline_request_size(image_bytes, prompt)
         if estimated_request_bytes >= self._max_inline_request_bytes:
             raise ValueError(
                 "Gemini inline request would exceed the configured byte limit; "
                 "lower extraction.image_dpi or add a File API transport"
             )
-
-    def close(self) -> None:
-        self._client.close()
-
-    def __enter__(self) -> GeminiPageTranslator:
-        return self
-
-    def __exit__(self, *_: object) -> None:
-        self.close()
-
-
-class GeminiRequestError(ValueError):
-    """A provider failure reduced to safe, actionable public fields."""
-
-
-def _repair_impossible_page_continuations(parsed: object) -> object:
-    """Downgrade contradictory page-edge claims and require human review.
-
-    Gemini's JSON schema cannot express that only the first/last flow body may
-    cross a physical page boundary. Valid output is returned untouched. An
-    impossible edge claim cannot be linked safely, so retain any non-conflicting
-    direction, otherwise use ``unknown``, and make the ambiguity visible during
-    editorial review.
-    """
-
-    if isinstance(parsed, BaseModel):
-        return parsed
-    if not isinstance(parsed, dict) or not isinstance(parsed.get("blocks"), list):
-        return parsed
-    repaired = deepcopy(parsed)
-    blocks = cast(list[object], repaired["blocks"])
-    mappings = [block for block in blocks if isinstance(block, dict)]
-    body_blocks = [block for block in mappings if block.get("type") == "body"]
-    if not body_blocks:
-        return repaired
-    incoming_flow = [
-        block for block in mappings if block.get("type") not in {"header", "footer", "page_number"}
-    ]
-    outgoing_flow = [block for block in incoming_flow if block.get("type") != "footnote"]
-    allowed_incoming = (
-        body_blocks[0] if incoming_flow and incoming_flow[0] is body_blocks[0] else None
-    )
-    allowed_outgoing = (
-        body_blocks[-1] if outgoing_flow and outgoing_flow[-1] is body_blocks[-1] else None
-    )
-    incoming_values = {"from_previous_page", "from_previous_and_to_next_page"}
-    outgoing_values = {"to_next_page", "from_previous_and_to_next_page"}
-    for block in body_blocks:
-        continuation = block.get("paragraph_continuation")
-        has_incoming = continuation in incoming_values
-        has_outgoing = continuation in outgoing_values
-        invalid_incoming = has_incoming and block is not allowed_incoming
-        invalid_outgoing = has_outgoing and block is not allowed_outgoing
-        if not invalid_incoming and not invalid_outgoing:
-            continue
-        keep_incoming = has_incoming and not invalid_incoming
-        keep_outgoing = has_outgoing and not invalid_outgoing
-        if keep_incoming and keep_outgoing:
-            repaired_value = "from_previous_and_to_next_page"
-        elif keep_incoming:
-            repaired_value = "from_previous_page"
-        elif keep_outgoing:
-            repaired_value = "to_next_page"
-        else:
-            repaired_value = "unknown"
-        block["paragraph_continuation"] = repaired_value
-        block["classification_review_required"] = True
-    return repaired
 
 
 def _safe_api_error_message(exc: errors.APIError) -> str:

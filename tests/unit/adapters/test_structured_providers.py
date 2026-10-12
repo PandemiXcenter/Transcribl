@@ -8,12 +8,10 @@ import httpx2 as httpx
 import openai
 import pytest
 
-from transcribl.adapters.llm.structured import (
-    AnthropicPageTranslator,
-    OpenAIPageTranslator,
-    StructuredPageTranslator,
-    StructuredRequestError,
-)
+from transcribl.adapters.llm.base import ProviderRequestError
+from transcribl.adapters.llm.providers.anthropic import AnthropicPageTranslator
+from transcribl.adapters.llm.providers.openai import OpenAIPageTranslator
+from transcribl.adapters.llm.structured import StructuredPageTranslator
 from transcribl.config import load_project_config
 from transcribl.domain.models import (
     GeneratedPagePayload,
@@ -182,7 +180,7 @@ def test_provider_errors_are_redacted_and_permanent_errors_are_not_retried(
     )
     image = tmp_path / "page.png"
     image.write_bytes(b"image")
-    with adapter, pytest.raises(StructuredRequestError, match="HTTP 401") as failure:
+    with adapter, pytest.raises(ProviderRequestError, match="HTTP 401") as failure:
         adapter.translate_page(
             PageTranslationRequest(1, "source", image, "image/png", "prompt", TranslationSettings())
         )
@@ -199,7 +197,7 @@ def test_size_guard_prevents_sdk_calls(tmp_path: Path, provider: str) -> None:
     image.write_bytes(b"x" * 1_000_000)
     cls = OpenAIPageTranslator if provider == "openai" else AnthropicPageTranslator
     adapter = cls(api_key="unused", config=settings, client=object())
-    with pytest.raises(StructuredRequestError, match="byte limit"):
+    with pytest.raises(ProviderRequestError, match="byte limit"):
         adapter.translate_page(
             PageTranslationRequest(1, "source", image, "image/png", "prompt", TranslationSettings())
         )
@@ -250,7 +248,7 @@ def test_missing_or_invalid_structured_output_is_rejected_without_content(
     )
     image = tmp_path / "page.png"
     image.write_bytes(b"image")
-    with pytest.raises(StructuredRequestError) as failure:
+    with pytest.raises(ProviderRequestError) as failure:
         adapter.translate_page(
             PageTranslationRequest(1, "source", image, "image/png", "prompt", TranslationSettings())
         )

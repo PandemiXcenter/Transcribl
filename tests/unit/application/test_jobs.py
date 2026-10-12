@@ -13,12 +13,9 @@ from pydantic import SecretStr
 from transcribl.adapters.secrets import DotenvSecretStore
 from transcribl.adapters.storage import FilesystemArtifactRepository
 from transcribl.application.editorial import EditorialService
+from transcribl.application.jobs.manager import JobManager
+from transcribl.application.jobs.records import JobNotFoundError, LocalJobStatus
 from transcribl.application.pipeline import TranslationPipeline
-from transcribl.application.web_jobs import (
-    WebJobManager,
-    WebJobNotFoundError,
-    WebJobStatus,
-)
 from transcribl.config import ProjectConfig, load_project_config
 from transcribl.domain.editorial import ReviewPosition
 from transcribl.domain.enums import (
@@ -231,9 +228,9 @@ def _stage_pdf(artifacts_dir: Path, staging_id: str) -> Path:
 
 
 def _wait_for_status(
-    manager: WebJobManager,
+    manager: JobManager,
     job_id: str,
-    expected: WebJobStatus,
+    expected: LocalJobStatus,
 ) -> None:
     deadline = time.monotonic() + 5
     while time.monotonic() < deadline:
@@ -275,7 +272,7 @@ def test_failed_web_job_survives_restart_and_continues_same_run(
             repository_factory=FilesystemArtifactRepository,
         )
 
-    manager = WebJobManager(
+    manager = JobManager(
         config=config,
         pipeline_factory=pipeline_factory,
         repository_factory=FilesystemArtifactRepository,
@@ -286,7 +283,7 @@ def test_failed_web_job_survives_restart_and_continues_same_run(
         display_filename="article.pdf",
         glossary={},
     )
-    _wait_for_status(manager, submitted.job_id, WebJobStatus.FAILED)
+    _wait_for_status(manager, submitted.job_id, LocalJobStatus.FAILED)
     failed = manager.get(submitted.job_id)
     assert failed.current_page == 2
     assert failed.total_pages == 2
@@ -304,7 +301,7 @@ def test_failed_web_job_survives_restart_and_continues_same_run(
     assert checkpoint.is_file()
     assert translator.calls == [1, 2]
 
-    restarted = WebJobManager(
+    restarted = JobManager(
         config=config,
         pipeline_factory=pipeline_factory,
         repository_factory=FilesystemArtifactRepository,
@@ -315,14 +312,14 @@ def test_failed_web_job_survives_restart_and_continues_same_run(
     assert recoverable[0].current_page == 2
     assert recoverable[0].provider == provider
     cancelled = restarted.cancel_job(run_id)
-    assert cancelled.status is WebJobStatus.CANCELLED
+    assert cancelled.status is LocalJobStatus.CANCELLED
     assert checkpoint.is_file()
 
     queued = restarted.continue_job(run_id)
-    assert queued.status is WebJobStatus.QUEUED
+    assert queued.status is LocalJobStatus.QUEUED
     restarted.shutdown()
     ready = restarted.get(run_id)
-    assert ready.status is WebJobStatus.READY
+    assert ready.status is LocalJobStatus.READY
     assert ready.translation_run_id == run_id
     assert translator.calls == [1, 2, 2]
     assert not (job_dirs[0] / "runs" / run_id / "pages" / "0002" / "failure.json").exists()
@@ -345,7 +342,7 @@ def test_auto_continue_retries_once_and_persists_policy(tmp_path: Path) -> None:
         translator.api_version = runtime_config.provider.gemini.api_version
         yield translator
 
-    manager = WebJobManager(
+    manager = JobManager(
         config=config,
         pipeline_factory=lambda: TranslationPipeline(
             extractor=TwoPageExtractor(),
@@ -363,7 +360,7 @@ def test_auto_continue_retries_once_and_persists_policy(tmp_path: Path) -> None:
     manager.shutdown()
 
     ready = manager.get(submitted.job_id)
-    assert ready.status is WebJobStatus.READY
+    assert ready.status is LocalJobStatus.READY
     assert translator.calls == [1, 2, 2]
     job_dir, run_id = manager.ready_context(submitted.job_id)
     manifest = FilesystemArtifactRepository(job_dir).read_manifest()
@@ -389,7 +386,7 @@ def test_auto_continue_stops_after_configured_attempts(tmp_path: Path) -> None:
         translator.api_version = runtime_config.provider.gemini.api_version
         yield translator
 
-    manager = WebJobManager(
+    manager = JobManager(
         config=config,
         pipeline_factory=lambda: TranslationPipeline(
             extractor=TwoPageExtractor(),
@@ -407,7 +404,7 @@ def test_auto_continue_stops_after_configured_attempts(tmp_path: Path) -> None:
     manager.shutdown()
 
     failed = manager.get(submitted.job_id)
-    assert failed.status is WebJobStatus.FAILED
+    assert failed.status is LocalJobStatus.FAILED
     assert failed.current_page == 2
     assert translator.calls == [1, 2, 2]
 
@@ -453,7 +450,7 @@ def test_web_jobs_run_in_order_and_preserve_distinct_glossary_runs(
             repository_factory=lambda root: FilesystemArtifactRepository(root),
         )
 
-    manager = WebJobManager(
+    manager = JobManager(
         config=config,
         pipeline_factory=pipeline_factory,
         repository_factory=FilesystemArtifactRepository,
@@ -499,9 +496,9 @@ def test_web_jobs_run_in_order_and_preserve_distinct_glossary_runs(
     first_ready = manager.get(first.job_id)
     second_ready = manager.get(second.job_id)
     third_ready = manager.get(third.job_id)
-    assert first_ready.status is WebJobStatus.READY
-    assert second_ready.status is WebJobStatus.READY
-    assert third_ready.status is WebJobStatus.READY
+    assert first_ready.status is LocalJobStatus.READY
+    assert second_ready.status is LocalJobStatus.READY
+    assert third_ready.status is LocalJobStatus.READY
     assert first_ready.translation_run_id != second_ready.translation_run_id
     assert third_ready.translation_run_id not in {
         first_ready.translation_run_id,
@@ -553,7 +550,7 @@ def test_web_jobs_run_in_order_and_preserve_distinct_glossary_runs(
     }
     assert all(review.job_id == review.translation_run_id for review in live_reviews)
 
-    assert all(review.status is WebJobStatus.READY for review in live_reviews)
+    assert all(review.status is LocalJobStatus.READY for review in live_reviews)
     assert all(review.accepted_blocks == 0 for review in live_reviews)
     assert all(review.total_blocks == 1 for review in live_reviews)
     assert not any(review.review_complete for review in live_reviews)
@@ -612,7 +609,7 @@ def test_web_jobs_run_in_order_and_preserve_distinct_glossary_runs(
     outside.mkdir()
     (config.paths.artifacts_dir / "linked-job").symlink_to(outside, target_is_directory=True)
 
-    restarted = WebJobManager(
+    restarted = JobManager(
         config=config,
         pipeline_factory=pipeline_factory,
         repository_factory=FilesystemArtifactRepository,
@@ -632,7 +629,7 @@ def test_web_jobs_run_in_order_and_preserve_distinct_glossary_runs(
     assert second_review.continue_page == 1
     assert second_review.filename == "article.pdf"
     assert second_review.page_count == 1
-    assert restarted.get(first_run_id).status is WebJobStatus.READY
+    assert restarted.get(first_run_id).status is LocalJobStatus.READY
     assert restarted.ready_context(first_run_id) == (first_job_dir, first_run_id)
 
     duplicate = config.paths.artifacts_dir / "duplicate-aaaaaaaaaaaa"
@@ -654,14 +651,14 @@ def test_web_jobs_run_in_order_and_preserve_distinct_glossary_runs(
         ),
     )
 
-    ambiguous = WebJobManager(
+    ambiguous = JobManager(
         config=config,
         pipeline_factory=pipeline_factory,
         repository_factory=FilesystemArtifactRepository,
         translator_factory=translator_context,
     )
     ambiguous_reviews = ambiguous.list_reviews()
-    with pytest.raises(WebJobNotFoundError, match="not found"):
+    with pytest.raises(JobNotFoundError, match="not found"):
         ambiguous.ready_context(first_run_id)
     ambiguous.shutdown()
 
@@ -692,7 +689,7 @@ def test_web_rerun_with_changed_image_dpi_automatically_renders_and_translates(
         del runtime_config, api_key
         yield translator
 
-    manager = WebJobManager(
+    manager = JobManager(
         config=config,
         pipeline_factory=lambda: TranslationPipeline(
             extractor=extractor,
@@ -716,8 +713,8 @@ def test_web_rerun_with_changed_image_dpi_automatically_renders_and_translates(
 
     first_ready = manager.get(first.job_id)
     rerun_ready = manager.get(rerun.job_id)
-    assert first_ready.status is WebJobStatus.READY
-    assert rerun_ready.status is WebJobStatus.READY
+    assert first_ready.status is LocalJobStatus.READY
+    assert rerun_ready.status is LocalJobStatus.READY
     assert first_ready.translation_run_id != rerun_ready.translation_run_id
     assert extractor.image_dpis == [150, 225]
     assert translator.settings_languages == [("Danish", "English"), ("Danish", "English")]
@@ -756,7 +753,7 @@ def test_completed_multi_page_review_reopens_after_manager_restart(
             repository_factory=FilesystemArtifactRepository,
         )
 
-    manager = WebJobManager(
+    manager = JobManager(
         config=config,
         pipeline_factory=pipeline_factory,
         repository_factory=FilesystemArtifactRepository,
@@ -801,7 +798,7 @@ def test_completed_multi_page_review_reopens_after_manager_restart(
         "read_document",
         counted_read_document,
     )
-    restarted = WebJobManager(
+    restarted = JobManager(
         config=config,
         pipeline_factory=pipeline_factory,
         repository_factory=FilesystemArtifactRepository,
@@ -835,9 +832,11 @@ def test_completed_multi_page_review_reopens_after_manager_restart(
             "review_complete": False,
             "translation_run_id": run_id,
             "updated_at": catalog.json()["jobs"][0]["updated_at"],
+            "cost": catalog.json()["jobs"][0]["cost"],
         }
     ]
     assert review.status_code == 200
+    assert catalog.json()["jobs"][0]["cost"]["total_usd"] is None
     assert review.json()["continue_page"] == 2
     assert review.json()["pages"][1]["blocks"][0]["machine_text"] == "Source text"
     assert review.json()["pages"][1]["blocks"][0]["effective_text"] == ("Reviewed page two")
@@ -853,5 +852,76 @@ def test_completed_multi_page_review_reopens_after_manager_restart(
     assert deleted_manifest.status.value == "prepared"
     assert not (job_dir / "runs" / run_id).exists()
     assert restarted.list_reviews() == []
-    with pytest.raises(WebJobNotFoundError, match="not found"):
+    with pytest.raises(JobNotFoundError, match="not found"):
         restarted.ready_context(run_id)
+
+
+def test_costs_learn_from_completed_runs_and_survive_restart(tmp_path: Path) -> None:
+    from dataclasses import replace
+
+    config = load_project_config(Path("config/default.toml"))
+    config = config.model_copy(
+        update={"paths": config.paths.model_copy(update={"artifacts_dir": tmp_path / "artifacts"})}
+    )
+
+    class UsageTranslator(RecordingTranslator):
+        @property
+        def descriptor(self) -> ProviderDescriptor:
+            return ProviderDescriptor(provider="openai", model="gpt-6-astra")
+
+        def translate_page(self, request: PageTranslationRequest) -> ProviderResult:
+            return replace(super().translate_page(request), input_tokens=1000, output_tokens=200)
+
+    @contextmanager
+    def translator_context(
+        runtime_config: ProjectConfig, api_key: SecretStr | None
+    ) -> Iterator[PageTranslator]:
+        yield UsageTranslator()
+
+    def new_manager() -> JobManager:
+        return JobManager(
+            config=config,
+            pipeline_factory=lambda: TranslationPipeline(
+                extractor=OnePageExtractor(), repository_factory=FilesystemArtifactRepository
+            ),
+            repository_factory=FilesystemArtifactRepository,
+            translator_factory=translator_context,
+        )
+
+    manager = new_manager()
+    api = create_app(config, job_manager=manager, secret_store=DotenvSecretStore(tmp_path / ".env"))
+    params: dict[str, str | int] = {"model": "gpt-6-astra", "page_count": 10}
+    with TestClient(api) as client:
+        assert client.get("/api/cost-estimate", params=params).json()["total_usd"] is None
+        invalid_queries: list[dict[str, str | int]] = [
+            {"model": "unknown", "page_count": 1},
+            {"model": "gpt-6-astra", "page_count": 0},
+            {"model": "gpt-6-astra", "page_count": config.web.max_pdf_pages + 1},
+        ]
+        for invalid in invalid_queries:
+            assert client.get("/api/cost-estimate", params=invalid).status_code == 422
+        submitted = manager.submit(
+            upload_path=_stage_pdf(config.paths.artifacts_dir, "usage"),
+            display_filename="cost.pdf",
+            glossary={},
+        )
+        manager.shutdown()
+        status = client.get(f"/api/jobs/{submitted.job_id}").json()
+        run_id = status["translation_run_id"]
+        assert status["cost"]["total_usd"] == pytest.approx(0.02)
+        catalog = client.get("/api/jobs").json()["jobs"][0]
+        assert catalog["cost"] == status["cost"]
+        assert client.get(f"/api/jobs/{run_id}/review").json()["cost"] == status["cost"]
+        estimate = client.get("/api/cost-estimate", params=params)
+        assert estimate.headers["cache-control"] == "no-store"
+        assert estimate.json()["total_usd"] == pytest.approx(0.2)
+        assert estimate.json()["sample_pages"] == 1
+        assert "Source text" not in estimate.text
+    restarted = new_manager()
+    try:
+        assert restarted.get(run_id).cost == status["cost"]
+        assert restarted.estimate_cost(
+            model="gpt-6-astra", page_count=10, thinking_level="default"
+        ).total_usd == pytest.approx(0.2)
+    finally:
+        restarted.shutdown()

@@ -41,7 +41,7 @@ class JobTranslationSettings(ApiModel):
 
 
 class ApiKeySettingsRequest(ApiModel):
-    provider: ProviderName = "gemini"
+    provider: ProviderName | None = None
     api_key: SecretStr = Field(min_length=1, max_length=4_000)
     save_on_computer: bool
 

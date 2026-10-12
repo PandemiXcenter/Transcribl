@@ -7,11 +7,14 @@ from pathlib import Path
 from pydantic import SecretStr
 
 from transcribl.adapters.extraction import MarkItDownPageExtractor
-from transcribl.adapters.llm import GeminiPageTranslator
-from transcribl.adapters.llm.structured import AnthropicPageTranslator, OpenAIPageTranslator
+from transcribl.adapters.llm.providers.anthropic import AnthropicPageTranslator
+from transcribl.adapters.llm.providers.google import GeminiPageTranslator
+from transcribl.adapters.llm.providers.openai import OpenAIPageTranslator
+from transcribl.adapters.secrets import DotenvSecretStore
+from transcribl.adapters.secrets.environment import SecretSettings
 from transcribl.adapters.storage import FilesystemArtifactRepository
 from transcribl.application.pipeline import TranslationPipeline
-from transcribl.config import ProjectConfig, SecretSettings
+from transcribl.config import ProjectConfig
 from transcribl.domain.models import DocumentTranslation
 from transcribl.ports.translation import PageTranslator
 from transcribl.runtime import default_secret_path
@@ -36,9 +39,7 @@ def provider_translator(
     """Build one configured provider adapter without leaking its secret."""
 
     name = config.provider.name
-    key_path = secret_path or default_secret_path()
-    if name != "gemini":
-        key_path = key_path.with_name(".provider-keys")
+    key_path = DotenvSecretStore(secret_path or default_secret_path()).path_for(name)
     secret = api_key or SecretSettings(_env_file=key_path).for_provider(name)
     if secret is None:
         raise ValueError(
@@ -80,7 +81,3 @@ def translate_with_config(
             translator=translator,
             force=force,
         )
-
-
-# Retain the previous composition entry point for local integrations.
-gemini_translator = provider_translator

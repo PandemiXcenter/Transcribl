@@ -69,7 +69,7 @@ def ingest(
         typer.Option(help="Rebuild prepared artifacts for this PDF."),
     ] = False,
 ) -> None:
-    """Prepare page artifacts without contacting Gemini."""
+    """Prepare page artifacts without contacting a translation provider."""
 
     runtime = _runtime(context)
     try:
@@ -157,7 +157,7 @@ def run(
             force=force,
         )
         console.print(
-            "[yellow]Gemini will receive one page image and that page's extracted "
+            "[yellow]The selected provider will receive one page image and that page's extracted "
             "Markdown per request.[/yellow]"
         )
         document = _translate(config, job_dir, force=force, pipeline=pipeline)

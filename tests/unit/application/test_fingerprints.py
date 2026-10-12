@@ -221,7 +221,8 @@ def test_new_provider_semantics_invalidate_both_passes_but_transport_does_not(
 ) -> None:
     from pathlib import Path
 
-    from transcribl.adapters.llm.structured import AnthropicPageTranslator, OpenAIPageTranslator
+    from transcribl.adapters.llm.providers.anthropic import AnthropicPageTranslator
+    from transcribl.adapters.llm.providers.openai import OpenAIPageTranslator
     from transcribl.config import load_project_config
 
     config = load_project_config(Path("config/default.toml"))

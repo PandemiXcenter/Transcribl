@@ -23,12 +23,12 @@ CLI commands                  NiceGUI desktop
          domain contracts                 port protocols
                                                ^
                                                |
-                      extraction / Gemini / filesystem / secret adapters
+                      extraction / provider SDK / filesystem / secret adapters
 ```
 
 - `domain` imports the standard library and Pydantic only.
 - `application` depends on domain contracts and port protocols.
-- `adapters` own MarkItDown, pypdf, PDFium, Gemini, and filesystem details.
+- `adapters` own MarkItDown, pypdf, PDFium, provider SDKs, and filesystem details.
 - `composition.py` wires shared concrete adapters.
 - `cli.py` owns command inputs and starts the local server; it does not own
   business rules.
@@ -39,8 +39,80 @@ CLI commands                  NiceGUI desktop
   isolated editorial HTML/JS component. `DesktopSession` calls the strict API in
   process with ASGITransport; it makes no network calls. The editorial component
   uses the same API over loopback, with CSRF tokens and no-store responses.
-- Gemini SDK types never leave `adapters/llm/gemini.py`.
-- Browser code never calls Gemini, MarkItDown, or filesystem adapters directly.
+- SDK imports are confined to `adapters/llm/providers/{google,openai,anthropic}.py`.
+  Shared request sizing, result mapping and page validation are SDK-free modules.
+- Browser code never calls provider SDKs, MarkItDown, or filesystem adapters directly.
+
+## Module ownership
+
+The public `domain.models` and `config` packages expose strict contracts while
+implementation modules separate generated payloads, canonical blocks/pages,
+provenance, settings and document/run identity. Moving these classes does not
+change persisted JSON schemas, prompt contracts or fingerprints.
+
+- `application/preparation.py` owns transactional PDF preparation; `pipeline.py`
+  coordinates ordered pages and canonical assembly. `translation/checkpoints.py`
+  owns one page's two-pass resume/failure transaction; `blocks.py`, `tables.py`
+  and `provenance.py` own their respective validation and assembly rules.
+- `application/jobs/manager.py` owns the bounded executor and process-local
+  catalog index. `runner.py` shares new/resumed execution, `discovery.py` scans
+  validated stopped/completed runs, and `catalog.py` builds review summaries.
+- `application/editorial.py` owns locked commands. `review/` separates effective
+  projections, history validation, scoped queries and uncertainty alignment.
+  `exporters/` holds Markdown, text and LaTeX renderers plus shared export policy
+  and GFM parsing. No compiled output becomes a metadata source.
+- `adapters/llm/base.py` maps neutral page/table requests and results;
+  `structured.py` shares structured response validation and sanitized failures.
+  Provider modules own SDK payloads, retries and usage mapping. Page-edge repair
+  remains enabled only for Google, preserving its existing semantic contract.
+- `adapters/storage/filesystem.py` implements the artifact/revision port;
+  `migrations.py` performs read-only legacy migration and `atomic.py` owns safe
+  publication. Glossary and preferences repositories reuse atomic replacement.
+  Secret persistence retains its separate private-permission write policy.
+- `interfaces/web/app.py` composes feature routers. Upload staging, CSRF/headers,
+  per-job settings, credentials and review serialization have separate modules.
+- `interfaces/desktop/workbench.py` coordinates mounted panels and window lifetime.
+  Translation, settings, credentials and glossaries own their controls/state.
+  The Articles component uses native ES modules under `static/editor/` for
+  API calls, rendering, drafts, revision commands, uncertainties and page sync.
+  Its import graph is acyclic; listeners remain delegated from stable containers.
+  `/editor-assets` serves checked-in package assets only, with no-store headers.
+
+Architecture regression tests enforce core dependency direction, SDK confinement,
+editor imports and asset references. The GitHub Actions packaged smoke test also
+checks nested editor JavaScript/CSS assets. Historical artifacts, prompt versions,
+provider IDs and secret file locations remain compatible. The legacy HTTP
+`gemini_api_key` upload field is accepted only for Gemini; all active clients use
+provider-neutral `api_key`. Omitted key-provider selections resolve from saved
+model defaults rather than a hard-coded company.
+
+## Usage and cost projections
+
+`application/costs.py` projects costs from validated `DocumentTranslation` usage
+metadata. `JobManager` supplies the completed immutable runs already discovered
+and indexed for Articles, adding newly completed runs immediately. It does not
+scan per-page checkpoints or count editorial copies. Samples with missing tokens
+are excluded, run/page pairs are deduplicated, and the TOML-configured recent
+sample limit applies after model/thinking/provider selection. Both page passes
+contribute to the page mean. Completed-run costs use each request's recorded
+provider/model and token counts, independently of current UI model choices.
+
+`domain/costs.py` owns strict price and summary contracts; `[costs]` owns rates,
+source URLs, verification/expiry dates, context tiers and sampling limits.
+Prices and estimates do not affect prompts, manifests or checkpoint identity.
+The Gemini adapter includes candidates plus thinking tokens in future output
+counts, recording an operational accounting marker without changing semantic
+provider configuration. Legacy usage remains untouched and visibly incomplete.
+
+`POST /api/pdf-info` uses existing CSRF, size/type validation, opaque staging and
+cleanup, calling the pypdf adapter in a worker thread for physical page counts.
+It never extracts page text or calls a provider. `GET /api/cost-estimate` validates
+page bounds and model allowlisting and uses saved thinking preferences. Desktop
+responses are guarded against stale uploads/model selections. Recorded costs
+are exposed on completed status, catalog and review responses. All are no-store
+display projections, recalculated from the configured price table rather than
+stored as invoices. Failed/retried requests whose usage was never checkpointed,
+cache discounts and taxes are not reconstructed.
 
 ## Desktop execution
 
@@ -100,7 +172,7 @@ The server boundary is intentionally small:
    then resolves strict per-job languages, model, style, previous-page context,
    image DPI, Auto continue policy, and term mappings from displayed TOML-backed
    defaults.
-3. `WebJobManager` records an opaque browser job ID and runs prepare, translate,
+3. `JobManager` records an opaque browser job ID and runs prepare, translate,
    and compile in a bounded `ThreadPoolExecutor`.
 4. The browser polls process-local progress. On failure it can continue the same
    active run or dismiss it without deleting checkpoints. When Auto continue is

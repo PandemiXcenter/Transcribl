@@ -9,15 +9,15 @@ from transcribl.adapters.secrets import (
     DotenvSecretStore,
     InvalidSecretValueError,
 )
-from transcribl.config import SecretSettings
+from transcribl.adapters.secrets.environment import SecretSettings
 
 
 def test_missing_store_has_no_key_and_clear_is_a_noop(tmp_path: Path) -> None:
     path = tmp_path / ".env"
     store = DotenvSecretStore(path)
 
-    assert store.has_gemini_api_key() is False
-    assert store.clear_gemini_api_key() is False
+    assert store.has_api_key("gemini") is False
+    assert store.clear_api_key("gemini") is False
     assert not path.exists()
 
 
@@ -25,9 +25,9 @@ def test_save_creates_private_file_without_returning_secret(tmp_path: Path) -> N
     path = tmp_path / ".env"
     store = DotenvSecretStore(path)
 
-    store.save_gemini_api_key(SecretStr("saved-key"))
+    store.save_api_key("gemini", SecretStr("saved-key"))
 
-    assert store.has_gemini_api_key() is True
+    assert store.has_api_key("gemini") is True
     assert path.read_text(encoding="utf-8") == "GEMINI_API_KEY='saved-key'\n"
     if os.name == "posix":
         assert stat.S_IMODE(path.stat().st_mode) == 0o600
@@ -38,7 +38,7 @@ def test_saved_key_is_readable_by_runtime_secret_settings(
 ) -> None:
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     path = tmp_path / ".env"
-    DotenvSecretStore(path).save_gemini_api_key("AIza_saved-key")
+    DotenvSecretStore(path).save_api_key("gemini", "AIza_saved-key")
 
     secret = SecretSettings(_env_file=path).gemini_api_key
 
@@ -58,7 +58,7 @@ def test_save_updates_first_definition_and_removes_duplicates(tmp_path: Path) ->
     )
     store = DotenvSecretStore(path)
 
-    store.save_gemini_api_key("new'key\\suffix")
+    store.save_api_key("gemini", "new'key\\suffix")
 
     assert path.read_bytes() == (
         b"# Local settings\r\n"
@@ -67,7 +67,7 @@ def test_save_updates_first_definition_and_removes_duplicates(tmp_path: Path) ->
         b"# GEMINI_API_KEY=commented-out\r\n"
         b"TAIL=preserved\r\n"
     )
-    assert store.has_gemini_api_key() is True
+    assert store.has_api_key("gemini") is True
 
 
 def test_clear_removes_all_definitions_and_preserves_other_lines(tmp_path: Path) -> None:
@@ -82,9 +82,9 @@ def test_clear_removes_all_definitions_and_preserves_other_lines(tmp_path: Path)
     )
     store = DotenvSecretStore(path)
 
-    assert store.clear_gemini_api_key() is True
+    assert store.clear_api_key("gemini") is True
     assert path.read_text(encoding="utf-8") == ("# GEMINI_API_KEY=commented\nOTHER=preserved\n\n")
-    assert store.clear_gemini_api_key() is False
+    assert store.clear_api_key("gemini") is False
 
 
 @pytest.mark.parametrize(
@@ -108,7 +108,7 @@ def test_save_rejects_blank_or_injectable_values_without_modifying_file(
     store = DotenvSecretStore(path)
 
     with pytest.raises(InvalidSecretValueError):
-        store.save_gemini_api_key(value)
+        store.save_api_key("gemini", value)
 
     assert path.read_bytes() == original
 
@@ -121,14 +121,14 @@ def test_status_uses_last_duplicate_and_understands_blank_dotenv_values(tmp_path
         encoding="utf-8",
     )
 
-    assert store.has_gemini_api_key() is False
+    assert store.has_api_key("gemini") is False
 
     path.write_text(
         'GEMINI_API_KEY="" # intentionally blank\nGEMINI_API_KEY="present" # active\n',
         encoding="utf-8",
     )
 
-    assert store.has_gemini_api_key() is True
+    assert store.has_api_key("gemini") is True
 
 
 def test_save_appends_without_rewriting_existing_line_endings(tmp_path: Path) -> None:
@@ -136,7 +136,7 @@ def test_save_appends_without_rewriting_existing_line_endings(tmp_path: Path) ->
     path.write_bytes(b"# existing comment\r\nOTHER=value")
     store = DotenvSecretStore(path)
 
-    store.save_gemini_api_key("saved-key")
+    store.save_api_key("gemini", "saved-key")
 
     assert path.read_bytes() == (
         b"# existing comment\r\nOTHER=value\r\nGEMINI_API_KEY='saved-key'\r\n"

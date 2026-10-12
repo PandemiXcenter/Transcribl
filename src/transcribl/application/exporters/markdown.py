@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from difflib import SequenceMatcher
 
+from transcribl.application.exporters.policy import map_anchor_offset, should_include
 from transcribl.application.footnotes import project_footnotes
 from transcribl.application.paragraphs import ParagraphProjection, project_paragraphs
 from transcribl.domain.enums import (
@@ -64,7 +64,7 @@ def compile_markdown(
         note_text = projection.text
         if owner is None or owner_text is None or note_text is None or anchor_offset is None:
             continue
-        mapped_offset = _map_anchor_offset(owner.translated_text or "", owner_text, anchor_offset)
+        mapped_offset = map_anchor_offset(owner.translated_text or "", owner_text, anchor_offset)
         owned_footnotes.setdefault(owner_id, []).append(
             (footnote, note_text, mapped_offset, projection.identity)
         )
@@ -105,7 +105,7 @@ def compile_markdown(
 
         for block in page.blocks:
             block_type = resolved_types.get(block.block_id, block.type)
-            if not _should_include(block, settings, block_type=block_type):
+            if not should_include(block, settings, block_type=block_type):
                 continue
             effective_text = overrides.get(block.block_id, block.translated_text)
             if block.block_id in owned_footnote_ids:
@@ -201,22 +201,6 @@ def _render_markdown_paragraph(
     return rendered
 
 
-def _should_include(
-    block: TranslatedBlock,
-    settings: MarkdownExportSettings,
-    *,
-    block_type: BlockType | None = None,
-) -> bool:
-    resolved_type = block_type or block.type
-    if resolved_type is BlockType.HEADER:
-        return settings.include_headers
-    if resolved_type is BlockType.FOOTER:
-        return settings.include_footers
-    if resolved_type is BlockType.PAGE_NUMBER:
-        return settings.include_page_numbers
-    return True
-
-
 def _render_block(
     block: TranslatedBlock,
     effective_text: str | None,
@@ -294,21 +278,6 @@ def _markdown_footnote_definition(
     lines = value.strip().splitlines()
     reference = identity or (footnote.footnote_id.id if footnote.footnote_id else footnote.block_id)
     return "\n".join([f"[^{reference}]: {lines[0]}", *(f"    {line}" for line in lines[1:])])
-
-
-def _map_anchor_offset(machine_text: str, effective_text: str, offset: int) -> int:
-    bounded = min(max(offset, 0), len(machine_text))
-    if machine_text == effective_text:
-        return min(bounded, len(effective_text))
-    matcher = SequenceMatcher(a=machine_text, b=effective_text, autojunk=False)
-    for tag, machine_start, machine_end, effective_start, effective_end in matcher.get_opcodes():
-        if machine_start <= bounded <= machine_end:
-            if tag == "equal":
-                return effective_start + min(
-                    bounded - machine_start, effective_end - effective_start
-                )
-            return effective_end
-    return len(effective_text)
 
 
 def _render_list_item(text: str) -> str:

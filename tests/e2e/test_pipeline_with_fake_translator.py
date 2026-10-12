@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-import transcribl.application.pipeline as pipeline_module
+import transcribl.application.translation.checkpoints as checkpoints_module
 from transcribl.adapters.storage import FilesystemArtifactRepository
 from transcribl.application.pipeline import TranslationPipeline
 from transcribl.domain.enums import (
@@ -721,7 +721,7 @@ def test_table_prompt_assembly_failure_is_recorded_as_table_stage(
     def fail_table_prompt(**_: object) -> str:
         raise ValueError("synthetic table prompt failure")
 
-    monkeypatch.setattr(pipeline_module, "build_table_prompt", fail_table_prompt)
+    monkeypatch.setattr(checkpoints_module, "build_table_prompt", fail_table_prompt)
     with pytest.raises(PageTranslationError, match="synthetic table prompt failure"):
         pipeline.translate_document(
             job_dir,

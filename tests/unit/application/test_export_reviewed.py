@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 
-from transcribl.application.export_reviewed import compile_latex, compile_text
+from transcribl.application.exporters.latex import compile_latex
+from transcribl.application.exporters.text import compile_text
 from transcribl.domain.enums import BlockType, ExtractionStatus, SegmentContinuation
 from transcribl.domain.models import (
     ArtifactRef,

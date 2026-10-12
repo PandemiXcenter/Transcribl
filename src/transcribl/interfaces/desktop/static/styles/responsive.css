@@ -1,0 +1,70 @@
+@media  (max-width: 800px) {
+.research-editor .review-panel {
+height: auto;
+}
+.research-editor .review-grid {
+height: auto;
+    grid-template-columns: 1fr;
+}
+.research-editor .review-pane + .review-pane {
+border-top: 1px solid var(--line);
+    border-left: 0;
+}
+.research-editor .source-scroll {
+height: 30vh;
+    min-height: 220px;
+}
+.research-editor .translation-scroll {
+height: 50vh;
+    min-height: 340px;
+}
+}
+@media  (max-width: 600px) {
+.research-editor .panel-header,
+.research-editor .review-toolbar {
+align-items: stretch;
+    flex-direction: column;
+}
+.research-editor .panel-header {
+gap: 1rem;
+}
+.research-editor .primary-button {
+width: 100%;
+}
+.research-editor .review-actions {
+justify-content: space-between;
+}
+.research-editor .review-list-card {
+grid-template-columns: 1fr;
+}
+.research-editor .review-list-actions {
+justify-content: flex-start;
+}
+.research-editor .review-key {
+flex-wrap: wrap;
+    padding-block: 0.45rem;
+}
+.research-editor .review-key span:last-child {
+width: 100%;
+    margin-left: 0;
+}
+.research-editor .pane-heading {
+padding-inline: 0.9rem;
+}
+.research-editor .dialog-actions {
+align-items: stretch;
+    flex-direction: column-reverse;
+}
+.research-editor .dialog-actions .text-button {
+align-self: center;
+    margin: 0.4rem 0 0;
+}
+}
+@media  (prefers-reduced-motion: reduce) {
+.research-editor *,
+.research-editor *::before,
+.research-editor *::after {
+scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+}
+}

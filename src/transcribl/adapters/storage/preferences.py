@@ -1,12 +1,11 @@
 """Atomic TOML persistence for a small, strictly validated non-secret settings file."""
 
 import json
-import os
 import tomllib
 from pathlib import Path
-from tempfile import NamedTemporaryFile
 from threading import RLock
 
+from transcribl.adapters.storage.atomic import atomic_write
 from transcribl.domain.preferences import (
     PreferencesConflictError,
     PreferencesStorageError,
@@ -50,20 +49,8 @@ class FilesystemPreferencesRepository:
                     f"{json.dumps(value, ensure_ascii=False)}"
                     for key, value in getattr(values, field).items()
                 )
-            temporary: Path | None = None
             try:
-                self.path.parent.mkdir(parents=True, exist_ok=True)
-                with NamedTemporaryFile(
-                    mode="w", encoding="utf-8", dir=self.path.parent, delete=False
-                ) as handle:
-                    temporary = Path(handle.name)
-                    handle.write("\n".join(lines) + "\n")
-                    handle.flush()
-                    os.fsync(handle.fileno())
-                temporary.replace(self.path)
+                atomic_write(self.path, "\n".join(lines) + "\n")
                 return saved
             except OSError:
                 raise PreferencesStorageError("Local settings could not be saved") from None
-            finally:
-                if temporary is not None:
-                    temporary.unlink(missing_ok=True)

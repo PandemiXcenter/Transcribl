@@ -1,30 +1,28 @@
 from __future__ import annotations
 
-from fastapi import FastAPI, Request, Response
+from importlib.resources import files
+
+from fastapi import FastAPI
 from nicegui import app, ui
-from starlette.middleware.base import RequestResponseEndpoint
+from starlette.staticfiles import StaticFiles
 
 from transcribl.config import ProjectConfig
 from transcribl.interfaces.desktop.workbench import create_workbench
 from transcribl.interfaces.web import create_app
+from transcribl.interfaces.web.security import install_private_headers
 
 
 def register_desktop(config: ProjectConfig, *, api: FastAPI | None = None) -> FastAPI:
     """Compose a single NiceGUI app and the existing loopback application API."""
     backend = api or create_app(config)
     app.mount("/backend", backend)
+    app.mount(
+        "/editor-assets",
+        StaticFiles(directory=str(files("transcribl.interfaces.desktop").joinpath("static"))),
+    )
     app.on_shutdown(backend.state.job_manager.shutdown)
 
-    @app.middleware("http")
-    async def private_response_headers(
-        request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
-        response = await call_next(request)
-        response.headers["Cache-Control"] = "no-store"
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
-        response.headers["Referrer-Policy"] = "no-referrer"
-        return response
+    install_private_headers(app)
 
     @ui.page("/")
     async def index() -> None:

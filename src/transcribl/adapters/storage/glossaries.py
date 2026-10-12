@@ -1,12 +1,11 @@
 """Atomic, process-locked local glossary catalog; no translation artifacts are changed."""
 
-import os
 from pathlib import Path
-from tempfile import NamedTemporaryFile
 from threading import RLock
 
 from pydantic import ValidationError
 
+from transcribl.adapters.storage.atomic import atomic_write
 from transcribl.domain.glossaries import (
     GlossaryConflictError,
     GlossaryLibrary,
@@ -79,24 +78,7 @@ class FilesystemGlossaryRepository:
             ) from None
 
     def _write(self, library: GlossaryLibrary) -> None:
-        temporary_path: Path | None = None
         try:
-            self._path.parent.mkdir(parents=True, exist_ok=True)
-            with NamedTemporaryFile(
-                mode="w",
-                encoding="utf-8",
-                dir=self._path.parent,
-                prefix=".glossaries-",
-                suffix=".tmp",
-                delete=False,
-            ) as temporary:
-                temporary_path = Path(temporary.name)
-                temporary.write(library.model_dump_json(indent=2))
-                temporary.flush()
-                os.fsync(temporary.fileno())
-            os.replace(temporary_path, self._path)
+            atomic_write(self._path, library.model_dump_json(indent=2))
         except (OSError, ValidationError):
             raise GlossaryStorageError("The local glossary library could not be saved") from None
-        finally:
-            if temporary_path is not None:
-                temporary_path.unlink(missing_ok=True)

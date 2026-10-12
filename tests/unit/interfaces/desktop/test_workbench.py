@@ -10,10 +10,12 @@ from nicegui.elements.upload_files import SmallFileUpload
 from nicegui.testing.user_simulation import user_simulation
 
 from transcribl.adapters.secrets import DotenvSecretStore
-from transcribl.application.web_jobs import WebJobManager, WebJobSnapshot, WebJobStatus
+from transcribl.application.jobs.manager import JobManager
+from transcribl.application.jobs.records import JobSnapshot, LocalJobStatus
 from transcribl.config import ProjectConfig, load_project_config
+from transcribl.interfaces.desktop.assets import asset
 from transcribl.interfaces.desktop.session import DesktopRequestError, DesktopSession
-from transcribl.interfaces.desktop.workbench import Workbench, asset
+from transcribl.interfaces.desktop.workbench import Workbench
 from transcribl.interfaces.web import create_app
 
 
@@ -21,9 +23,9 @@ class FakeManager:
     def __init__(self) -> None:
         self.submissions: list[dict[str, Any]] = []
 
-    def submit(self, **kwargs: Any) -> WebJobSnapshot:
+    def submit(self, **kwargs: Any) -> JobSnapshot:
         self.submissions.append(kwargs)
-        return WebJobSnapshot("a" * 32, WebJobStatus.QUEUED, "study.pdf", 0, 2, None, None)
+        return JobSnapshot("a" * 32, LocalJobStatus.QUEUED, "study.pdf", 0, 2, None, None)
 
     def list_recoverable(self) -> list[object]:
         return []
@@ -43,7 +45,7 @@ def config_for(tmp_path: Path) -> ProjectConfig:
 async def test_desktop_session_preserves_csrf_validation_and_key_redaction(tmp_path: Path) -> None:
     store = DotenvSecretStore(tmp_path / ".env")
     api = create_app(
-        config_for(tmp_path), job_manager=cast(WebJobManager, FakeManager()), secret_store=store
+        config_for(tmp_path), job_manager=cast(JobManager, FakeManager()), secret_store=store
     )
     session = DesktopSession(api)
     await session.initialize()
@@ -71,7 +73,7 @@ async def test_nicegui_glossary_language_settings_and_submission(tmp_path: Path)
     manager = FakeManager()
     api = create_app(
         config,
-        job_manager=cast(WebJobManager, manager),
+        job_manager=cast(JobManager, manager),
         secret_store=DotenvSecretStore(tmp_path / ".env"),
     )
     windows: list[Workbench] = []
@@ -87,46 +89,48 @@ async def test_nicegui_glossary_language_settings_and_submission(tmp_path: Path)
         await user.should_see("Translate PDF")
         workbench = windows[0]
         with user:
-            await workbench.refresh_glossaries()
-            await workbench.start_translation()
-            assert workbench.translate_error.text == "Choose a PDF first."
+            await workbench.glossaries.refresh_glossaries()
+            await workbench.translation.start_translation()
+            assert workbench.translation.translate_error.text == "Choose a PDF first."
             workbench.tabs.set_value("Glossaries")
         await user.should_see("Glossary name")
         with user:
-            workbench.glossary_name.set_value("Historical medicine")
-            workbench.rows = [{"source_term": "Vattersot", "target_translation": "Dropsy"}]
-            await workbench.save_glossary()
-            assert workbench.editing is not None
-            selected_id = workbench.editing["glossary_id"]
-            assert workbench.glossary_choice.value == selected_id
+            workbench.glossaries.glossary_name.set_value("Historical medicine")
+            workbench.glossaries.rows = [
+                {"source_term": "Vattersot", "target_translation": "Dropsy"}
+            ]
+            await workbench.glossaries.save_glossary()
+            assert workbench.glossaries.editing is not None
+            selected_id = workbench.glossaries.editing["glossary_id"]
+            assert workbench.translation.glossary_choice.value == selected_id
             workbench.tabs.set_value("Settings")
-            workbench.settings_model.set_value("gpt-6-astra")
-            await workbench.save_settings()
-            assert workbench.job_model.value == "gpt-6-astra"
-            workbench.key_inputs["openai"].set_value("test-window-key")
-            await workbench.save_api_key("openai")
-            assert workbench.key_inputs["openai"].value == ""
+            workbench.settings.settings_model.set_value("gpt-6-astra")
+            await workbench.settings.save_settings()
+            assert workbench.translation.job_model.value == "gpt-6-astra"
+            workbench.credentials.key_inputs["openai"].set_value("test-window-key")
+            await workbench.credentials.save_api_key("openai")
+            assert workbench.credentials.key_inputs["openai"].value == ""
             assert workbench.session.keys["openai"] == "test-window-key"
             workbench.tabs.set_value("Translate")
-            workbench.source.select.set_value("Custom")
-            workbench.source.custom.set_value("Old Danish")
-            workbench.target.select.set_value("English")
-            workbench.file = SmallFileUpload(
+            workbench.translation.source.select.set_value("Custom")
+            workbench.translation.source.custom.set_value("Old Danish")
+            workbench.translation.target.select.set_value("English")
+            workbench.translation.file = SmallFileUpload(
                 name="study.pdf", content_type="application/pdf", _data=b"%PDF-1.7\nsynthetic"
             )
-            workbench.mark_dirty()
-            await workbench.start_translation()
-            assert "Save or discard" in workbench.translate_error.text
+            workbench.glossaries.mark_dirty()
+            await workbench.translation.start_translation()
+            assert "Save or discard" in workbench.translation.translate_error.text
             assert not manager.submissions
-            workbench.dirty = False
-            await workbench.start_translation()
+            workbench.glossaries.dirty = False
+            await workbench.translation.start_translation()
             assert len(manager.submissions) == 1
             submitted = manager.submissions[0]
             assert submitted["glossary"] == {"Vattersot": "Dropsy"}
             assert submitted["runtime_config"].translation.source_language == "Old Danish"
             assert submitted["runtime_config"].provider.name == "openai"
             assert submitted["api_key"].get_secret_value() == "test-window-key"
-            assert workbench.file is None
+            assert workbench.translation.file is None
             await workbench.close()
 
 
@@ -135,7 +139,7 @@ async def test_api_keys_dialog_manages_providers_independently(tmp_path: Path) -
     config = config_for(tmp_path)
     api = create_app(
         config,
-        job_manager=cast(WebJobManager, FakeManager()),
+        job_manager=cast(JobManager, FakeManager()),
         secret_store=DotenvSecretStore(tmp_path / ".env"),
     )
     windows: list[Workbench] = []
@@ -150,38 +154,38 @@ async def test_api_keys_dialog_manages_providers_independently(tmp_path: Path) -
         workbench = windows[0]
         with user:
             workbench.tabs.set_value("Settings")
-        assert not workbench.api_keys_dialog.value
+        assert not workbench.credentials.api_keys_dialog.value
         user.find(kind=ui.button, content="API Keys").click()
         await user.should_see("Google (Gemini) API key")
         await user.should_see("OpenAI API key")
         await user.should_see("Anthropic API key")
-        assert workbench.api_keys_dialog.value
+        assert workbench.credentials.api_keys_dialog.value
         with user:
-            await workbench.save_api_key("anthropic")
-            assert workbench.key_messages["anthropic"].text == "Enter an API key."
+            await workbench.credentials.save_api_key("anthropic")
+            assert workbench.credentials.key_messages["anthropic"].text == "Enter an API key."
             for provider in ("gemini", "openai", "anthropic"):
-                workbench.key_inputs[provider].set_value(f"test-{provider}-key")
-                workbench.save_keys[provider].set_value(provider != "openai")
-            workbench.settings_model.set_value("gpt-6-astra")
+                workbench.credentials.key_inputs[provider].set_value(f"test-{provider}-key")
+                workbench.credentials.save_keys[provider].set_value(provider != "openai")
+            workbench.settings.settings_model.set_value("gpt-6-astra")
             for provider in ("gemini", "openai", "anthropic"):
-                assert workbench.key_for(provider) == f"test-{provider}-key"
-                await workbench.save_api_key(provider)
-                assert workbench.key_inputs[provider].value == ""
+                assert workbench.credentials.key_for(provider) == f"test-{provider}-key"
+                await workbench.credentials.save_api_key(provider)
+                assert workbench.credentials.key_inputs[provider].value == ""
             assert workbench.session.keys == {"openai": "test-openai-key"}
-            assert workbench.key_statuses["openai"].text == "Available for this window"
-            assert workbench.key_statuses["anthropic"].text == "Saved on this computer"
-            await workbench.clear_api_key("anthropic")
+            assert workbench.credentials.key_statuses["openai"].text == "Available for this window"
+            assert workbench.credentials.key_statuses["anthropic"].text == "Saved on this computer"
+            await workbench.credentials.clear_api_key("anthropic")
             public = await workbench.session.request("GET", "/api/config")
             assert public["api_keys"]["gemini"]["saved_on_computer"]
             assert not public["api_keys"]["anthropic"]["saved_on_computer"]
-            assert workbench.key_for("openai") == "test-openai-key"
+            assert workbench.credentials.key_for("openai") == "test-openai-key"
             assert "test-" not in str(public)
-            workbench.api_keys_dialog.close()
+            workbench.credentials.api_keys_dialog.close()
         user.find(kind=ui.button, content="API Keys").click()
         await user.should_see("Google (Gemini) API key")
-        assert all(field.value == "" for field in workbench.key_inputs.values())
-        assert workbench.settings_model.value == "gpt-6-astra"
-        assert workbench.model == "gemini-3.8-flash"
+        assert all(field.value == "" for field in workbench.credentials.key_inputs.values())
+        assert workbench.settings.settings_model.value == "gpt-6-astra"
+        assert workbench.translation.model == "gemini-3.8-flash"
         with user:
             await workbench.close()
 
@@ -191,7 +195,7 @@ async def test_settings_icon_custom_styles_and_separate_defaults(tmp_path: Path)
     config = config_for(tmp_path)
     api = create_app(
         config,
-        job_manager=cast(WebJobManager, FakeManager()),
+        job_manager=cast(JobManager, FakeManager()),
         secret_store=DotenvSecretStore(tmp_path / ".env"),
     )
     windows: list[Workbench] = []
@@ -210,33 +214,46 @@ async def test_settings_icon_custom_styles_and_separate_defaults(tmp_path: Path)
         await user.should_see("Default style")
         await user.should_see("Default glossary")
         with user:
-            await workbench.refresh_glossaries()
-            workbench.job_model.set_value("claude-sonnet-5-5")
-            workbench.settings_model.set_value("gpt-6-luna")
-            workbench.new_style_name.set_value("Historical prose")
-            workbench.add_style()
-            workbench.style_prompt.set_value("Preserve historical idioms and quotations.")
-            workbench.settings_style.set_value("Historical prose")
-            workbench.thinking["openai"].set_value("high")
-            await workbench.save_settings()
-            assert workbench.settings_revision == 1
-            assert workbench.job_model.value == "claude-sonnet-5-5"
-            assert workbench.job_style.value == "Historical prose"
+            await workbench.glossaries.refresh_glossaries()
+            workbench.translation.job_model.set_value("claude-sonnet-5-5")
+            workbench.settings.settings_model.set_value("gpt-6-luna")
+            workbench.settings.new_style_name.set_value("Historical prose")
+            workbench.settings.add_style()
+            workbench.settings.style_prompt.set_value("Preserve historical idioms and quotations.")
+            workbench.settings.settings_style.set_value("Historical prose")
+            workbench.settings.thinking["openai"].set_value("high")
+            await workbench.settings.save_settings()
+            assert workbench.settings.settings_revision == 1
+            assert workbench.translation.job_model.value == "claude-sonnet-5-5"
+            assert workbench.translation.job_style.value == "Historical prose"
             assert workbench.preferences.default_model == "gpt-6-luna"
-            workbench.settings_model.set_value("gpt-6-astra")
-            await workbench.reload_settings()
-            assert workbench.settings_model.value == "gpt-6-luna"
-            assert workbench.style_prompt.value == "Preserve historical idioms and quotations."
-            assert "Historical prose" in workbench.prompt_settings.value
-            workbench.style_editor_choice.set_value("balanced")
-            workbench.style_prompt.set_value("Edited built-in instructions.")
-            workbench.reset_style()
-            assert workbench.style_prompt.value == config.workbench.style_prompts["balanced"]
+            workbench.settings.settings_model.set_value("gpt-6-astra")
+            await workbench.settings.reload_settings()
+            assert workbench.settings.settings_model.value == "gpt-6-luna"
+            assert (
+                workbench.settings.style_prompt.value
+                == "Preserve historical idioms and quotations."
+            )
+            assert "Historical prose" in workbench.settings.prompt_settings.value
+            workbench.settings.style_editor_choice.set_value("balanced")
+            workbench.settings.style_prompt.set_value("Edited built-in instructions.")
+            workbench.settings.reset_style()
+            assert (
+                workbench.settings.style_prompt.value == config.workbench.style_prompts["balanced"]
+            )
             await workbench.close()
 
 
 def test_editor_component_keeps_complete_review_and_delegated_events() -> None:
-    script, html, css = asset("editor.js"), asset("editor.html"), asset("editor.css")
+    from importlib.resources import files
+
+    components = files("transcribl.interfaces.desktop").joinpath("static", "editor")
+    script = "\n".join(p.read_text("utf-8") for p in components.iterdir() if p.name.endswith(".js"))
+    html = asset("editor.html")
+    css = "\n".join(
+        p.read_text("utf-8")
+        for p in files("transcribl.interfaces.desktop").joinpath("static", "styles").iterdir()
+    )
     for feature in (
         "renderAllReviewPages",
         "showSourcePage",
@@ -259,13 +276,85 @@ def test_editor_component_keeps_complete_review_and_delegated_events() -> None:
         assert feature in script
     assert "for (const page of state.reviewPages)" in script
     assert "translationContent.addEventListener('paste', handleReviewPaste)" in script
-    factory = script.split("function makeTranslationBlock", 1)[1].split(
-        "function captureDrafts", 1
-    )[0]
-    assert ".addEventListener" not in factory
+    for name in ("blocks.js", "paragraphs.js"):
+        assert ".addEventListener" not in components.joinpath(name).read_text("utf-8")
     assert "Translate All" in html
     assert 'id="translate-all"' in html
     assert "/backend/api/jobs/" in script
     assert ".research-editor .source-scroll" in css
     assert "overflow: hidden" in css
     assert "<iframe" not in html
+
+
+@pytest.mark.asyncio
+async def test_upload_estimate_model_change_and_removed_file(tmp_path: Path) -> None:
+    from io import BytesIO
+
+    from nicegui import events
+    from pypdf import PdfWriter
+
+    from transcribl.domain.costs import CostSummary
+
+    class CostManager(FakeManager):
+        def estimate_cost(self, *, model: str, page_count: int, thinking_level: str) -> CostSummary:
+            price = 0.1 if model == "gpt-6-astra" else 0.01
+            return CostSummary(
+                kind="estimate",
+                page_count=page_count,
+                total_usd=price * page_count,
+                per_page_usd=price,
+                sample_pages=120,
+                basis="all models",
+            )
+
+    config = config_for(tmp_path)
+    api = create_app(
+        config,
+        job_manager=cast(JobManager, CostManager()),
+        secret_store=DotenvSecretStore(tmp_path / ".env"),
+    )
+    windows: list[Workbench] = []
+
+    async def root() -> None:
+        session = DesktopSession(api)
+        windows.append(Workbench(config, session, await session.initialize()))
+
+    writer = PdfWriter()
+    writer.add_blank_page(width=100, height=100)
+    writer.add_blank_page(width=100, height=100)
+    buffer = BytesIO()
+    writer.write(buffer)
+    async with user_simulation(root) as user:
+        user.javascript_rules[re.compile(".*", re.S)] = lambda _: None
+        await user.open("/")
+        workbench = windows[0]
+        with user:
+            await workbench.translation.uploaded(
+                events.UploadEventArguments(
+                    sender=workbench.translation.upload,
+                    client=workbench.client,
+                    file=SmallFileUpload(
+                        name="two.pdf", content_type="application/pdf", _data=buffer.getvalue()
+                    ),
+                )
+            )
+            assert workbench.translation.pdf_page_count == 2
+            assert "$0.0200 USD" in workbench.translation.estimate_label.text
+            assert "120 completed pages" in workbench.translation.estimate_details.text
+            workbench.translation.job_model.set_value("gpt-6-astra")
+        await user.should_see("Estimated cost ≈ $0.2000 USD · 2 pages at $0.1000/page")
+        with user:
+            workbench.translation.remove_file()
+            assert workbench.translation.estimate_label.text == ""
+            assert workbench.translation.pdf_page_count is None
+            assert not workbench.translation.cost_details.visible
+            workbench.translation.job = {
+                "filename": "two.pdf",
+                "status": "ready",
+                "total_pages": 2,
+                "current_page": 2,
+                "cost": {"total_usd": 0.025},
+            }
+            workbench.translation.render_progress()
+            assert "$0.0250 USD" in workbench.translation.progress_cost.text
+            await workbench.close()

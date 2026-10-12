@@ -2,90 +2,21 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
-from difflib import SequenceMatcher
 
+from transcribl.application.exporters.gfm import parse_gfm_table
+from transcribl.application.exporters.policy import (
+    manual_insertion_label,
+    map_anchor_offset,
+    should_include,
+)
 from transcribl.application.footnotes import project_footnotes
 from transcribl.application.paragraphs import ParagraphProjection, project_paragraphs
-from transcribl.domain.enums import BlockType, ManualInsertionReason, SegmentHandling
+from transcribl.domain.enums import BlockType, SegmentHandling
 from transcribl.domain.models import (
     DocumentTranslation,
     MarkdownExportSettings,
     TranslatedBlock,
 )
-
-
-def compile_text(
-    document: DocumentTranslation,
-    settings: MarkdownExportSettings,
-    *,
-    editorial_overrides: Mapping[str, str] | None = None,
-    type_overrides: Mapping[str, BlockType] | None = None,
-) -> str:
-    """Project canonical blocks and effective revisions into readable plain text."""
-
-    overrides = editorial_overrides or {}
-    resolved_types = type_overrides or {}
-    blocks = [block for page in document.pages for block in page.blocks]
-    effective_text_by_id = {
-        block.block_id: overrides.get(block.block_id, block.translated_text) for block in blocks
-    }
-    footnote_projections = project_footnotes(
-        blocks,
-        effective_text_by_id=effective_text_by_id,
-        type_overrides=resolved_types,
-    )
-    merged_footnote_ids = {
-        fragment_id
-        for projection in footnote_projections
-        for fragment_id in projection.fragment_ids[1:]
-    }
-    merged_text_by_first_id = {
-        projection.first_block.block_id: projection.text for projection in footnote_projections
-    }
-    paragraph_projections = project_paragraphs(
-        blocks,
-        effective_text_by_id=effective_text_by_id,
-        type_overrides=resolved_types,
-    )
-    merged_paragraph_ids = {
-        fragment.block.block_id
-        for projection in paragraph_projections
-        for fragment in projection.fragments[1:]
-    }
-    merged_paragraph_text_by_first_id = {
-        projection.paragraph_id: _plain_paragraph(projection)
-        for projection in paragraph_projections
-        if len(projection.fragments) > 1
-    }
-    parts: list[str] = []
-    list_items: list[str] = []
-    for page in document.pages:
-        for block in page.blocks:
-            block_type = resolved_types.get(block.block_id, block.type)
-            if not _should_include(block, settings, block_type=block_type):
-                continue
-            effective_text = overrides.get(block.block_id, block.translated_text)
-            if block.block_id in merged_footnote_ids:
-                continue
-            if block.block_id in merged_paragraph_ids:
-                continue
-            if block.block_id in merged_text_by_first_id:
-                effective_text = merged_text_by_first_id[block.block_id]
-            if block.block_id in merged_paragraph_text_by_first_id:
-                effective_text = merged_paragraph_text_by_first_id[block.block_id]
-            if block_type is BlockType.LIST_ITEM:
-                if effective_text is not None and effective_text.strip():
-                    list_items.append(f"- {_plain_text(effective_text)}")
-                continue
-            _flush_plain_list(parts, list_items)
-            rendered = _render_text_block(block, effective_text, block_type=block_type)
-            if not rendered:
-                continue
-            parts.append(rendered)
-        _flush_plain_list(parts, list_items)
-
-    rendered_document = "\n\n".join(parts).rstrip()
-    return f"{rendered_document}\n" if rendered_document else ""
 
 
 def compile_latex(
@@ -134,7 +65,7 @@ def compile_latex(
             continue
         if owner is None or owner_text is None or note_text is None or anchor_offset is None:
             continue
-        mapped_offset = _map_anchor_offset(
+        mapped_offset = map_anchor_offset(
             owner.translated_text or "",
             owner_text,
             anchor_offset,
@@ -176,7 +107,7 @@ def compile_latex(
         )
         for block in page.blocks:
             block_type = resolved_types.get(block.block_id, block.type)
-            if not _should_include(block, settings, block_type=block_type):
+            if not should_include(block, settings, block_type=block_type):
                 continue
             effective_text = overrides.get(block.block_id, block.translated_text)
             if block.block_id in owned_footnote_ids:
@@ -235,55 +166,6 @@ def compile_latex(
     )
 
 
-def _should_include(
-    block: TranslatedBlock,
-    settings: MarkdownExportSettings,
-    *,
-    block_type: BlockType | None = None,
-) -> bool:
-    resolved_type = block_type or block.type
-    if resolved_type is BlockType.HEADER:
-        return settings.include_headers
-    if resolved_type is BlockType.FOOTER:
-        return settings.include_footers
-    if resolved_type is BlockType.PAGE_NUMBER:
-        return settings.include_page_numbers
-    return True
-
-
-def _render_text_block(
-    block: TranslatedBlock,
-    effective_text: str | None,
-    *,
-    block_type: BlockType | None = None,
-) -> str:
-    resolved_type = block_type or block.type
-    if block.segment_handling is SegmentHandling.MANUAL_INSERTION:
-        if effective_text is not None and effective_text.strip():
-            return (
-                _plain_table(effective_text)
-                if resolved_type is BlockType.TABLE
-                else _plain_text(effective_text)
-            )
-        return _manual_insertion_label(block)
-    if effective_text is None or not effective_text.strip():
-        return ""
-    if resolved_type is BlockType.TABLE:
-        return _plain_table(effective_text)
-    if resolved_type is BlockType.FOOTNOTE:
-        marker = (
-            f" {block.footnote_id.text}"
-            if block.footnote_id is not None and block.footnote_id.text
-            else ""
-        )
-        return f"Footnote{marker}: {_plain_text(effective_text)}"
-    return _plain_text(effective_text)
-
-
-def _plain_paragraph(projection: ParagraphProjection) -> str:
-    return " ".join(_plain_text(fragment.text).strip() for fragment in projection.fragments)
-
-
 def _render_latex_paragraph(
     projection: ParagraphProjection,
     *,
@@ -324,7 +206,7 @@ def _render_latex_block(
             if block.type is BlockType.TABLE:
                 return _latex_table(block, effective_text)
             return _latex_quote(_latex_text(effective_text))
-        return _latex_quote(f"\\textbf{{{_latex_text(_manual_insertion_label(block))}}}")
+        return _latex_quote(f"\\textbf{{{_latex_text(manual_insertion_label(block))}}}")
     if effective_text is None or not effective_text.strip():
         return ""
     resolved_type = block_type or block.type
@@ -384,43 +266,6 @@ def _latex_inline_fragment(value: str) -> str:
     return "".join(replacements.get(character, character) for character in value).replace("\n", " ")
 
 
-def _map_anchor_offset(machine_text: str, effective_text: str, offset: int) -> int:
-    """Keep an inline marker aligned when surrounding owner text was edited."""
-
-    bounded = min(max(offset, 0), len(machine_text))
-    if machine_text == effective_text:
-        return min(bounded, len(effective_text))
-    matcher = SequenceMatcher(a=machine_text, b=effective_text, autojunk=False)
-    for tag, machine_start, machine_end, effective_start, effective_end in matcher.get_opcodes():
-        if machine_start <= bounded <= machine_end:
-            if tag == "equal":
-                return effective_start + min(
-                    bounded - machine_start, effective_end - effective_start
-                )
-            return effective_end
-    return len(effective_text)
-
-
-def _manual_insertion_label(block: TranslatedBlock) -> str:
-    reason = {
-        ManualInsertionReason.TABLE: "table",
-        ManualInsertionReason.TABLE_LIKE: "table-like material",
-        ManualInsertionReason.FIGURE: "figure",
-        None: "material",
-    }[block.manual_insertion_reason]
-    return f"Manual insertion required: {reason} on original page {block.original_page_number}."
-
-
-def _plain_text(value: str) -> str:
-    return "\n".join(line.rstrip() for line in value.strip().splitlines())
-
-
-def _flush_plain_list(parts: list[str], items: list[str]) -> None:
-    if items:
-        parts.append("\n".join(items))
-        items.clear()
-
-
 def _flush_latex_list(parts: list[str], items: list[str]) -> bool:
     if not items:
         return False
@@ -452,16 +297,8 @@ def _latex_text(value: str) -> str:
     return "\\par\n".join(part.replace("\n", " ") for part in paragraphs)
 
 
-def _plain_table(value: str) -> str:
-    parsed = _parse_gfm_table(value)
-    if parsed is None:
-        return _plain_text(value)
-    _, rows, _ = parsed
-    return "\n".join("\t".join(cell.strip() for cell in row) for row in rows)
-
-
 def _latex_table(block: TranslatedBlock, value: str) -> str:
-    parsed = _parse_gfm_table(value)
+    parsed = parse_gfm_table(value)
     anchor = (
         f"% table-placement: [H!]; original-page: {block.original_page_number}; "
         f"block-id: {block.block_id}"
@@ -548,47 +385,3 @@ def _find_unescaped_strong_close(value: str, start: int) -> int | None:
 
 
 _MARKDOWN_ESCAPABLE_CHARACTERS = frozenset("!\\\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~")
-
-
-def _parse_gfm_table(value: str) -> tuple[list[str], list[list[str]], int] | None:
-    lines = [line.strip() for line in value.strip().splitlines() if line.strip()]
-    if len(lines) < 2:
-        return None
-    header = _split_gfm_row(lines[0])
-    separators = _split_gfm_row(lines[1])
-    if not header or len(header) != len(separators):
-        return None
-    if any(re.fullmatch(r":?-{3,}:?", separator.strip()) is None for separator in separators):
-        return None
-    alignments = [
-        "right" if separator.strip().endswith(":") else "left" for separator in separators
-    ]
-    rows = [header]
-    for line in lines[2:]:
-        row = _split_gfm_row(line)
-        if len(row) < len(header):
-            row.extend([""] * (len(header) - len(row)))
-        rows.append(row[: len(header)])
-    return alignments, rows, len(header)
-
-
-def _split_gfm_row(line: str) -> list[str]:
-    content = line.strip().removeprefix("|").removesuffix("|")
-    cells: list[str] = []
-    current: list[str] = []
-    escaped = False
-    for character in content:
-        if escaped:
-            current.append(character)
-            escaped = False
-        elif character == "\\":
-            escaped = True
-        elif character == "|":
-            cells.append("".join(current).strip())
-            current = []
-        else:
-            current.append(character)
-    if escaped:
-        current.append("\\")
-    cells.append("".join(current).strip())
-    return cells

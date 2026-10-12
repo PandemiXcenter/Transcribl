@@ -61,6 +61,15 @@ def main() -> None:
                 ) as response:
                     assert response.status == 200
                     assert response.headers["Cache-Control"] == "no-store"
+                # Nested editor modules and styles must survive PyInstaller collection.
+                for asset in ("editor/index.js", "editor/review.js", "styles/workspace.css"):
+                    with urllib.request.urlopen(
+                        f"http://127.0.0.1:{port}/editor-assets/{asset}", timeout=5
+                    ) as response:
+                        assert response.status == 200
+                        assert response.read()
+                        assert response.headers["Cache-Control"] == "no-store"
+
             finally:
                 process.terminate()
                 process.wait(timeout=30)

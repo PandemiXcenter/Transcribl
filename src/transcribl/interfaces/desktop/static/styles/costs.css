@@ -1,0 +1,10 @@
+.cost-breakdown {
+font-size: 0.85rem;
+}
+.cost-breakdown > summary {
+cursor: pointer;
+}
+.cost-breakdown > p {
+max-width: 65ch;
+  font-size: 0.8rem;
+}

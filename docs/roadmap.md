@@ -36,6 +36,16 @@ Still required before production claims:
 The ordinary suite has not contacted any provider, so live translation quality and
 provider-account behavior remain unverified.
 
+## Modular codebase
+
+Provider SDK adapters, page checkpoint transactions, local job execution/discovery,
+editorial projections, format exporters, strict configuration and desktop panels
+have separate modules. The Articles editor uses an acyclic native ES module graph.
+Shared export policies and storage writes are centralized; obsolete pre-NiceGUI
+styles are removed. Architecture regression checks and packaged asset smoke checks
+protect these boundaries. Live provider behavior and native release artifacts still
+require the explicit verification described below.
+
 ## Phase 2 — translation quality controls
 
 Implemented:
@@ -70,6 +80,8 @@ Implemented:
   translations (default 2), shared by primary and table prompts and constrained
   to current-page-only output;
 - named local glossaries with per-job selection and immutable term snapshots;
+- pre-submission USD estimates learned from completed page usage, including table
+  passes, and approximate recorded costs on finished jobs and Articles;
 - persisted workbench defaults, provider thinking controls, and editable named
   styles with exact prompt inspection and checkpoint invalidation;
 - per-job input/output languages, style, and allowlisted provider model, with TOML

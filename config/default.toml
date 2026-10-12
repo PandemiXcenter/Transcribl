@@ -120,3 +120,76 @@ max_style_prompt_characters = 4000
 faithful = "Remain as close as the target language permits to source wording, syntax, and historical register. Preserve every supported fact."
 balanced = "Preserve meaning and tone while using natural target-language syntax. Preserve every supported fact."
 readable = "Prioritize fluent modern target-language prose without omitting, summarizing, or inventing information."
+
+# Approximate standard paid-tier USD prices, per one million tokens.
+# Pricing is a display projection, never part of translation/cache identity.
+[costs]
+minimum_matching_pages = 5
+max_history_pages = 1000
+
+[costs.prices."gemini-3.8-flash"]
+provider = "gemini"
+input_usd_per_million = 0.75
+output_usd_per_million = 3.75
+checked_on = 2026-10-12
+valid_until = 2026-12-31
+source = "https://ai.google.dev/gemini-api/docs/pricing"
+note = "Introductory Gemini pricing through December 31, 2026."
+
+# Historical pricing only: this does not make the model selectable.
+[costs.prices."gemini-3.6-flash"]
+provider = "gemini"
+input_usd_per_million = 0.75
+output_usd_per_million = 3.75
+checked_on = 2026-10-12
+valid_until = 2026-12-31
+source = "https://ai.google.dev/gemini-api/docs/pricing"
+note = "Approximate historical cost at the listed October 2026 rates."
+
+[costs.prices."gpt-6-astra"]
+provider = "openai"
+input_usd_per_million = 10.0
+output_usd_per_million = 50.0
+checked_on = 2026-10-12
+source = "https://developers.openai.com/api/docs/pricing"
+note = "OpenAI standard short-context rates; long-context premiums are not included."
+
+[costs.prices."gpt-6.1-sol"]
+provider = "openai"
+input_usd_per_million = 2.0
+output_usd_per_million = 10.0
+checked_on = 2026-10-12
+source = "https://developers.openai.com/api/docs/pricing"
+note = "OpenAI standard short-context rates; long-context premiums are not included."
+
+[costs.prices."gpt-6-luna"]
+provider = "openai"
+input_usd_per_million = 0.1
+output_usd_per_million = 0.5
+checked_on = 2026-10-12
+source = "https://developers.openai.com/api/docs/pricing"
+note = "OpenAI standard short-context rates; long-context premiums are not included."
+
+[costs.prices."claude-opus-5-5"]
+provider = "anthropic"
+input_usd_per_million = 4.0
+output_usd_per_million = 20.0
+checked_on = 2026-10-12
+source = "https://platform.claude.com/docs/en/about-claude/pricing"
+
+[costs.prices."claude-sonnet-5-5"]
+provider = "anthropic"
+input_usd_per_million = 2.0
+output_usd_per_million = 10.0
+checked_on = 2026-10-12
+source = "https://platform.claude.com/docs/en/about-claude/pricing"
+
+[costs.prices."claude-haiku-5-5"]
+provider = "anthropic"
+input_usd_per_million = 0.1
+output_usd_per_million = 0.5
+long_context_threshold = 100000
+long_input_usd_per_million = 0.5
+long_output_usd_per_million = 2.5
+checked_on = 2026-10-12
+source = "https://platform.claude.com/docs/en/about-claude/pricing"

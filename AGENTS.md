@@ -35,7 +35,7 @@ provider path as verified.
 5. Make the smallest coherent change in that layer and add proportional tests.
 6. Run the relevant quality gates listed below.
 7. Report changed behavior, verification performed, and anything still
-   unverified—especially live Gemini behavior.
+   unverified—especially live provider behavior.
 
 Do not delete or rewrite user PDFs, generated artifacts, or unrelated changes.
 Files in `data/` are local user inputs, not disposable fixtures.
@@ -56,8 +56,9 @@ src/transcribl/ports/
     web implementations.
 
 src/transcribl/application/
-    Provider-neutral orchestration, prompt assembly, fingerprints, local job
-    lifecycle, editorial commands/queries, and exporters.
+    Provider-neutral orchestration, prompt assembly and fingerprints.
+    translation/ owns page checkpoints; jobs/ owns local execution/discovery;
+    review/ owns effective projections/history; exporters/ owns format policies.
     Depends on domain and ports, never concrete infrastructure.
 
 src/transcribl/adapters/extraction/
@@ -68,13 +69,15 @@ src/transcribl/adapters/export/
     shell escape remains disabled.
 
 src/transcribl/adapters/llm/
-    Gemini SDK boundary. Google SDK types must not escape this package.
+    Shared SDK-free request/result handling and validation.
+    providers/{google,openai,anthropic}.py own individual SDK boundaries.
 
 src/transcribl/adapters/storage/
-    Filesystem machine-artifact and append-only revision implementation.
+    Filesystem artifacts/revisions, shared atomic writes and read-only migrations.
 
 src/transcribl/adapters/secrets/
-    Narrow local `GEMINI_API_KEY` persistence. No other setting or secret.
+    Provider API-key persistence and environment resolution only.
+    Preserve legacy .env and .provider-keys locations; never expose stored values.
 
 src/transcribl/prompts/
     Versioned prompt resources. Prompt behavior is part of cache identity.
@@ -84,8 +87,12 @@ src/transcribl/interfaces/web/
     Calls application services; owns HTTP/CSRF/upload/presentation concerns.
 
 src/transcribl/interfaces/desktop/
-    NiceGUI native controls, per-window state, and the scoped editorial component.
+    Workbench coordinator plus translation/settings/credentials/glossary panels.
+    static/editor/ contains acyclic ES modules; static/styles/ contains scoped CSS.
     Uses the strict application API; no pipeline or provider implementation.
+
+src/transcribl/config/
+    Strict non-secret config sections, TOML loading and saved-default resolution.
 
 src/transcribl/composition.py
     Shared wiring for CLI and web entry points.
@@ -111,7 +118,7 @@ tests/e2e/
     Full application execution with fake providers.
 ```
 
-The web UI must call application services. It must not call Gemini/MarkItDown
+The web UI must call application services. It must not call provider SDKs/MarkItDown
 directly, accept filesystem paths from the browser, or reconstruct metadata from
 Markdown.
 
@@ -219,7 +226,7 @@ All user-adjustable non-secret runtime defaults, limits, and available choices
 must flow through TOML. Explicit per-job UI selections resolve from that
 configuration rather than creating new hidden defaults:
 
-1. add or update a strict nested model in `config.py` or the appropriate domain
+1. add or update a strict nested model in `config/` or the appropriate domain
    settings model;
 2. add the value to `config/default.toml`;
 3. wire the resolved value through the composition root/application boundary;
@@ -421,10 +428,10 @@ library when adequate.
   and target-desktop testing have actually run.
 
 For a web change, inspect `interfaces/web/app.py`, its strict schemas, `interfaces/desktop/` and its editorial
-assets, `application/web_jobs.py`, `application/editorial.py`, and the matching
+assets, `application/jobs/manager.py`, `application/editorial.py`, and the matching
 tests before editing. Keep upload validation, path confinement, CSRF checks,
 no-store headers, model allowlisting, secret redaction, and staged-upload cleanup
-intact. Use fake managers/providers in tests; do not spend Gemini tokens to
+intact. Use fake managers/providers in tests; do not spend provider tokens to
 exercise the interface.
 
 ## Testing and verification
@@ -467,7 +474,7 @@ Useful focused gate for interface/editorial work:
 ```bash
 uv run pytest \
   tests/unit/interfaces/web \
-  tests/unit/application/test_web_jobs.py \
+  tests/unit/application/test_jobs.py \
   tests/unit/application/test_editorial.py \
   tests/unit/adapters/test_filesystem_editorial.py
 ```
@@ -476,7 +483,7 @@ NiceGUI and editorial component changes also require a local non-provider smoke 
 form validation, translated-pane scroll synchronization, edit controls, and the
 conditional Translate All action. If the browser runtime is unavailable, state
 that visual/browser behavior was not verified rather than substituting a live
-Gemini call.
+provider call.
 
 Any future live test must use `@pytest.mark.live`, be skipped unless both an
 explicit opt-in flag and key exist, and be excluded from ordinary CI/development

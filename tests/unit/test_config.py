@@ -3,7 +3,8 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from transcribl.config import SecretSettings, load_project_config
+from transcribl.adapters.secrets.environment import SecretSettings
+from transcribl.config import load_project_config
 from transcribl.domain.enums import TranslationStyle, UncertaintyLevel
 from transcribl.domain.errors import ConfigurationError
 

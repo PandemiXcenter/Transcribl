@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from transcribl.adapters.secrets import DotenvSecretStore
 from transcribl.adapters.storage import FilesystemArtifactRepository
 from transcribl.application.editorial import EditorialService
-from transcribl.application.web_jobs import WebJobManager
+from transcribl.application.jobs.manager import JobManager
 from transcribl.config import load_project_config
 from transcribl.domain.enums import (
     BlockType,
@@ -186,7 +186,7 @@ def test_review_api_validates_cross_page_paragraph_in_one_command(tmp_path: Path
     )
     app = create_app(
         config,
-        job_manager=cast(WebJobManager, ReadyJobManager(job_dir)),
+        job_manager=cast(JobManager, ReadyJobManager(job_dir)),
         secret_store=DotenvSecretStore(tmp_path / ".env"),
     )
     job_path = f"/api/jobs/{'b' * 32}"
@@ -257,7 +257,7 @@ def test_review_revision_replace_all_and_export_contract(tmp_path: Path) -> None
     pdf_compiler = RecordingPdfCompiler()
     app = create_app(
         config,
-        job_manager=cast(WebJobManager, manager),
+        job_manager=cast(JobManager, manager),
         secret_store=DotenvSecretStore(tmp_path / ".env"),
         pdf_compiler=pdf_compiler,
     )
@@ -371,7 +371,7 @@ def test_pdf_export_failure_is_redacted(tmp_path: Path) -> None:
     )
     app = create_app(
         config,
-        job_manager=cast(WebJobManager, ReadyJobManager(job_dir)),
+        job_manager=cast(JobManager, ReadyJobManager(job_dir)),
         secret_store=DotenvSecretStore(tmp_path / ".env"),
         pdf_compiler=FailingPdfCompiler(),
     )
@@ -393,7 +393,7 @@ def test_review_api_persists_block_type_and_unowned_footnote_warning(tmp_path: P
     )
     app = create_app(
         config,
-        job_manager=cast(WebJobManager, ReadyJobManager(job_dir)),
+        job_manager=cast(JobManager, ReadyJobManager(job_dir)),
         secret_store=DotenvSecretStore(tmp_path / ".env"),
     )
 
@@ -441,7 +441,7 @@ def test_review_page_image_and_position_are_scoped_and_persisted(tmp_path: Path)
     manager = ReadyJobManager(job_dir)
     app = create_app(
         config,
-        job_manager=cast(WebJobManager, manager),
+        job_manager=cast(JobManager, manager),
         secret_store=DotenvSecretStore(tmp_path / ".env"),
     )
     job_path = f"/api/jobs/{'b' * 32}"
@@ -494,7 +494,7 @@ def test_saving_review_position_does_not_build_full_review_projection(
     )
     app = create_app(
         config,
-        job_manager=cast(WebJobManager, ReadyJobManager(job_dir)),
+        job_manager=cast(JobManager, ReadyJobManager(job_dir)),
         secret_store=DotenvSecretStore(tmp_path / ".env"),
     )
 
@@ -541,7 +541,7 @@ def test_manual_insertion_metadata_and_revision_flow_through_review_api(
     )
     app = create_app(
         config,
-        job_manager=cast(WebJobManager, ReadyJobManager(job_dir)),
+        job_manager=cast(JobManager, ReadyJobManager(job_dir)),
         secret_store=DotenvSecretStore(tmp_path / ".env"),
     )
     job_path = f"/api/jobs/{'b' * 32}"
@@ -630,7 +630,7 @@ def test_review_uncertainty_groups_are_sorted_by_duplicate_count(tmp_path: Path)
     )
     app = create_app(
         config,
-        job_manager=cast(WebJobManager, ReadyJobManager(job_dir)),
+        job_manager=cast(JobManager, ReadyJobManager(job_dir)),
         secret_store=DotenvSecretStore(tmp_path / ".env"),
     )
 
