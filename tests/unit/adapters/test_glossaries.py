@@ -88,7 +88,6 @@ def test_unicode_roundtrip_and_strict_catalog_contract(tmp_path: Path) -> None:
     [
         ("", entries()),
         ("x" * 21, entries()),
-        ("Name", []),
         ("Name", entries() * 2),
         ("Name", [GlossaryEntry(source_term=str(i), target_translation="x") for i in range(3)]),
         ("Name", [GlossaryEntry(source_term="x" * 31, target_translation="x")]),
@@ -100,6 +99,14 @@ def test_invalid_glossaries_do_not_write_files(
     with pytest.raises(GlossaryError):
         service(tmp_path).save(source_language="Danish", name=name, entries=terms)
     assert not list(tmp_path.iterdir())
+
+
+def test_empty_glossary_saves_and_resolves_without_terms(tmp_path: Path) -> None:
+    library = service(tmp_path)
+    saved = library.save(source_language="Danish", name="Empty", entries=[])
+    assert service(tmp_path).get(saved.glossary_id) == saved
+    assert SavedGlossary.model_validate_json(saved.model_dump_json()) == saved
+    assert library.resolve(saved.glossary_id, source_language="Danish", expected_revision=1) == {}
 
 
 def test_duplicate_names_and_casefolded_source_terms_are_rejected(tmp_path: Path) -> None:

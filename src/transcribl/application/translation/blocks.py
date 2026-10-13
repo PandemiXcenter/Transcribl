@@ -45,7 +45,7 @@ def to_translated_blocks(
     for generated in generated_blocks:
         if not isinstance(generated, GeneratedTextBlock):
             continue
-        translated_text, token_offsets = _strip_footnote_reference_tokens(generated.translated_text)
+        translated_text, token_offsets = strip_footnote_reference_tokens(generated.translated_text)
         translated_text_by_order[generated.order] = translated_text
         generated_owner_block_id = f"p{original_page_number:04d}-b{generated.order:04d}"
         for token, offset in token_offsets.items():
@@ -119,7 +119,7 @@ def to_translated_blocks(
     return translated
 
 
-def _strip_footnote_reference_tokens(value: str) -> tuple[str, dict[str, int]]:
+def strip_footnote_reference_tokens(value: str) -> tuple[str, dict[str, int]]:
     """Remove provider-only anchor tokens while retaining trusted Unicode offsets."""
 
     parts: list[str] = []

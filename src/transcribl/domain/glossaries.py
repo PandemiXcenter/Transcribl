@@ -21,7 +21,7 @@ class SavedGlossary(ContractModel):
     name: NonEmptyText
     source_language: LanguageName | None = None
     revision: int = Field(ge=1)
-    entries: list[GlossaryEntry] = Field(min_length=1)
+    entries: list[GlossaryEntry]
 
     @model_validator(mode="after")
     def terms_are_unique(self) -> Self:

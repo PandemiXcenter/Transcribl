@@ -37,12 +37,20 @@ def test_real_sdk_serializes_page_and_table_contracts_offline(
                 "blocks": [
                     {
                         "order": 1,
-                        "type": "title",
-                        "source_text": "Titel",
-                        "translated_text": "Title",
-                        "paragraph_continuation": None,
+                        "type": "body",
+                        "source_text": "mation subsided.",
+                        "translated_text": "subsided.",
+                        "paragraph_continuation": "from_previous_page",
                     }
-                ]
+                ],
+                "paragraph_revisions": [
+                    {
+                        "original_page_number": 1,
+                        "order": 1,
+                        "translated_text": "The inflammation",
+                        "uncertainties": [],
+                    }
+                ],
             }
         )
     )
@@ -105,7 +113,7 @@ def test_real_sdk_serializes_page_and_table_contracts_offline(
     image = tmp_path / "page.png"
     image.write_bytes(b"synthetic-image")
     args: dict[str, Any] = dict(
-        original_page_number=1,
+        original_page_number=2,
         markdown="complete markdown",
         image_path=image,
         image_media_type="image/png",
@@ -137,6 +145,8 @@ def test_real_sdk_serializes_page_and_table_contracts_offline(
         assert content[0]["source"]["data"] == encoded
         schema = body["output_config"]["format"]["schema"]
     assert ("tables" if table else "blocks") in schema["properties"]
+    if not table:
+        assert "paragraph_revisions" in schema["properties"]
     if thinking == "default":
         assert "reasoning" not in body and "thinking" not in body
         assert "thinking_level" not in adapter.descriptor.semantic_configuration

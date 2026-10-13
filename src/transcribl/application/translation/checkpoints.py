@@ -12,6 +12,7 @@ from transcribl.application.prompting import (
     build_table_prompt,
 )
 from transcribl.application.translation.blocks import to_translated_blocks
+from transcribl.application.translation.paragraph_repair import apply_paragraph_revisions
 from transcribl.application.translation.tables import (
     apply_table_reconstruction,
     pending_table_blocks,
@@ -107,6 +108,9 @@ def translate_page_checkpoint(
                     "inputs, config, prompt, provider, or model; rerun with --force"
                 )
             translation = refresh_page_evidence(checkpoint, page, markdown)
+            apply_paragraph_revisions(
+                translated_pages, translation, enabled=settings.previous_page_context_count > 0
+            )
             if not pending_table_blocks(translation):
                 validate_completed_table_checkpoint(
                     translation=translation,
@@ -151,6 +155,7 @@ def translate_page_checkpoint(
                 source_markdown_artifact=page.markdown,
                 source_image=page.image,
                 blocks=blocks,
+                paragraph_revisions=result.payload.paragraph_revisions,
                 input_fingerprint=fingerprint,
                 provider=ProviderMetadata(
                     provider=descriptor.provider,
@@ -162,6 +167,9 @@ def translate_page_checkpoint(
                     input_tokens=result.input_tokens,
                     output_tokens=result.output_tokens,
                 ),
+            )
+            apply_paragraph_revisions(
+                translated_pages, translation, enabled=settings.previous_page_context_count > 0
             )
             # The first-pass result is a durable stage checkpoint. If the
             # table call fails, resume starts here instead of paying for

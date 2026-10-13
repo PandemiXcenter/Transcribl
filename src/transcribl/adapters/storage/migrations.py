@@ -12,17 +12,32 @@ def read_core_payload(path: Path) -> object:
     payload: object = json.loads(read(path))
     if not isinstance(payload, dict):
         return payload
-    if payload.get("schema_version") == "2.0":
-        return migrate_v5_payload(
-            migrate_v4_payload(migrate_v3_payload(migrate_v2_payload(payload)))
-        )
-    if payload.get("schema_version") == "3.0":
-        return migrate_v5_payload(migrate_v4_payload(migrate_v3_payload(payload)))
-    if payload.get("schema_version") == "4.0":
-        return migrate_v5_payload(migrate_v4_payload(payload))
-    if payload.get("schema_version") == "5.0":
-        return migrate_v5_payload(payload)
+    migrations = {
+        "2.0": migrate_v2_payload,
+        "3.0": migrate_v3_payload,
+        "4.0": migrate_v4_payload,
+        "5.0": migrate_v5_payload,
+        "6.0": migrate_v6_payload,
+    }
+    while (version := str(payload.get("schema_version"))) in migrations:
+        payload = migrations[version](payload)
     return payload
+
+
+def migrate_v6_payload(payload: dict[str, object]) -> dict[str, object]:
+    """Preserve v6 wording; no paragraph repair is inferred or scheduled."""
+    migrated = dict(payload)
+    migrated["schema_version"] = "7.0"
+    if "blocks" in migrated:
+        migrated["paragraph_revisions"] = []
+    pages = migrated.get("pages")
+    if isinstance(pages, list) and any(
+        isinstance(page, dict) and "schema_version" in page for page in pages
+    ):
+        migrated["pages"] = [
+            migrate_v6_payload(page) if isinstance(page, dict) else page for page in pages
+        ]
+    return migrated
 
 
 def migrate_v5_payload(payload: dict[str, object]) -> dict[str, object]:

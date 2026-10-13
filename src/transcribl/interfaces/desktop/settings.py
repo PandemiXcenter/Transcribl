@@ -279,9 +279,11 @@ class SettingsPanel:
         self.default_auto_continue.set_value(saved.auto_continue)
         for provider, field in self.thinking.items():
             field.set_value(saved.thinking_levels[provider])
-        # Preserve deliberate per-job overrides while advancing untouched defaults.
+        # Saving/reloading the default explicitly selects it for the next translation.
+        # The normal change handler also updates provider/key routing and the estimate.
+        self.workbench.translation.job_model.set_value(saved.default_model)
+        # Preserve other deliberate per-job overrides while advancing untouched defaults.
         updates: list[tuple[Any, object, object]] = [
-            (self.workbench.translation.job_model, previous.default_model, saved.default_model),
             (
                 self.workbench.translation.glossary_choice,
                 previous.default_glossary,

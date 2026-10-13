@@ -61,7 +61,8 @@ mark_uncertain_terms = true
 uncertainty_level = "standard"
 # Optional extra review targets, for example all numbers or all medical terms.
 uncertainty_instructions = ""
-# Include this many finalized prior page translations as read-only continuity context.
+# General prior-page context window. When nonzero, also send the full linked
+# unfinished paragraph for scoped repair; zero disables both kinds of context.
 previous_page_context_count = 2
 
 # Add source-term = "preferred target rendering" pairs here.

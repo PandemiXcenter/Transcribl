@@ -27,7 +27,7 @@ from transcribl.domain.models.settings import TranslationSettings
 class DocumentTranslation(ContractModel):
     """Canonical dataset consumed by the future editor and all exporters."""
 
-    schema_version: Literal["6.0"] = SCHEMA_VERSION
+    schema_version: Literal["7.0"] = SCHEMA_VERSION
     translation_run_id: TranslationRunId
     document_id: Sha256
     job_id: NonEmptyText
@@ -80,6 +80,21 @@ class DocumentTranslation(ContractModel):
                     raise ValueError(
                         "paragraph continuation must link the previous page's final body block"
                     )
+        for page in self.pages:
+            if not page.paragraph_revisions:
+                continue
+            incoming = next(block for block in page.blocks if block.type is BlockType.BODY)
+            targets = []
+            previous_id = incoming.continues_from_block_id
+            while previous_id is not None:
+                previous = blocks_by_id[previous_id]
+                targets.append((previous.original_page_number, previous.order))
+                previous_id = previous.continues_from_block_id
+            if list(reversed(targets)) != [
+                (revision.original_page_number, revision.order)
+                for revision in page.paragraph_revisions
+            ]:
+                raise ValueError("paragraph revisions must cover the entire connected paragraph")
         for block in blocks_by_id.values():
             previous_footnote_id = block.footnote_continues_from_block_id
             if previous_footnote_id is None:

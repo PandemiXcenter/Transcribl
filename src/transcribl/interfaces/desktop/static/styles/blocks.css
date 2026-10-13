@@ -127,16 +127,16 @@ border-left: 3px solid var(--accent);
 }
 .research-editor .paragraph-page-boundary {
 display: inline-flex;
-  margin: 0 0.3rem;
-  padding: 0.12rem 0.38rem;
-  border: 1px solid var(--focus);
-  border-radius: 999px;
-  background: var(--surface);
+  margin: 0;
+  padding: 0.1rem 0.2rem;
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
   color: var(--focus);
   font: inherit;
-  font-size: 0.66rem;
-  font-weight: 760;
-  vertical-align: 0.12em;
+  font-size: 0.8rem;
+  font-weight: 400;
+  vertical-align: 0.05em;
   cursor: pointer;
 }
 .research-editor .paragraph-page-boundary:hover,

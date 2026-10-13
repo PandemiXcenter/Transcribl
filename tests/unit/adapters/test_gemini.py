@@ -15,6 +15,7 @@ from transcribl.domain.models import (
     GeneratedTablePayload,
     TranslationSettings,
 )
+from transcribl.domain.models.paragraphs import ParagraphFragmentRevision
 from transcribl.ports.translation import (
     PageTranslationRequest,
     TableReconstructionRequest,
@@ -54,15 +55,20 @@ def test_gemini_adapter_maps_multimodal_structured_output(
         blocks=[
             GeneratedBlock(
                 order=1,
-                type=BlockType.TITLE,
-                source_text="Titel",
-                translated_text="Title",
-                paragraph_continuation=None,
+                type=BlockType.BODY,
+                source_text="mation subsided.",
+                translated_text="subsided.",
+                paragraph_continuation=SegmentContinuation.FROM_PREVIOUS_PAGE,
+            )
+        ],
+        paragraph_revisions=[
+            ParagraphFragmentRevision(
+                original_page_number=2, order=1, translated_text="The inflammation"
             )
         ],
     )
     response = SimpleNamespace(
-        parsed=payload,
+        parsed=payload.model_dump(mode="json"),
         text=None,
         response_id="response-123",
         usage_metadata=SimpleNamespace(

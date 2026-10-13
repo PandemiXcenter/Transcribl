@@ -4,6 +4,9 @@ import pytest
 
 import transcribl.application.translation.checkpoints as checkpoints_module
 from transcribl.adapters.storage import FilesystemArtifactRepository
+from transcribl.application.exporters.latex import compile_latex
+from transcribl.application.exporters.markdown import compile_markdown
+from transcribl.application.exporters.text import compile_text
 from transcribl.application.pipeline import TranslationPipeline
 from transcribl.domain.enums import (
     BlockType,
@@ -31,6 +34,7 @@ from transcribl.domain.models import (
     PreparedPage,
     TranslationSettings,
 )
+from transcribl.domain.models.paragraphs import ParagraphFragmentRevision
 from transcribl.hashing import sha256_file
 from transcribl.ports.translation import (
     PageTranslationRequest,
@@ -42,6 +46,9 @@ from transcribl.ports.translation import (
 
 
 class FakeExtractor:
+    def __init__(self, page_count: int = 2) -> None:
+        self.page_count = page_count
+
     def extract_pages(
         self,
         source_pdf: Path,
@@ -51,7 +58,7 @@ class FakeExtractor:
     ) -> list[PreparedPage]:
         del source_pdf
         pages: list[PreparedPage] = []
-        for number in (1, 2):
+        for number in range(1, self.page_count + 1):
             page_dir = artifact_root / "pages" / f"{number:04d}"
             page_dir.mkdir(parents=True, exist_ok=True)
             markdown_path = page_dir / "source.md"
@@ -1028,3 +1035,154 @@ def test_same_config_forced_failure_retries_the_failed_page(
 
     assert resumed.calls == [2]
     assert resumed_document.translation_run_id == failed_run_id
+
+
+class ParagraphRepairTranslator(FakeTranslator):
+    def translate_page(self, request: PageTranslationRequest) -> ProviderResult:
+        result = super().translate_page(request)
+        number = request.original_page_number
+        wording = {1: "The inflam-", 2: "subsided after treat-", 3: "was effective."}
+        continuation = {
+            1: SegmentContinuation.TO_NEXT_PAGE,
+            2: SegmentContinuation.FROM_PREVIOUS_AND_TO_NEXT_PAGE,
+            3: SegmentContinuation.FROM_PREVIOUS_PAGE,
+        }
+        replacements = {
+            1: [],
+            2: ["The inflammation"],
+            3: ["Inflammation subsided,", "and the treatment"],
+        }
+        return ProviderResult(
+            payload=GeneratedPagePayload(
+                blocks=[
+                    result.payload.blocks[0].model_copy(
+                        update={
+                            "translated_text": wording[number],
+                            "paragraph_continuation": continuation[number],
+                        }
+                    )
+                ],
+                paragraph_revisions=[
+                    ParagraphFragmentRevision(
+                        original_page_number=page, order=1, translated_text=text
+                    )
+                    for page, text in enumerate(replacements[number], 1)
+                ],
+            ),
+            input_tokens=100,
+            output_tokens=50,
+        )
+
+
+def test_entire_paragraph_repair_replays_after_failure_without_rewriting_checkpoints(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "three.pdf"
+    source.write_bytes(b"%PDF-fake")
+    pipeline = TranslationPipeline(
+        extractor=FakeExtractor(3), repository_factory=FilesystemArtifactRepository
+    )
+    job_dir = pipeline.prepare_document(source, artifacts_dir=tmp_path / "artifacts", image_dpi=150)
+    translator = ParagraphRepairTranslator(fail_once_on=3)
+    settings = TranslationSettings(previous_page_context_count=1)
+    with pytest.raises(PageTranslationError):
+        pipeline.translate_document(job_dir, settings=settings, translator=translator)
+    repository = FilesystemArtifactRepository(job_dir)
+    run_id = repository.read_manifest().translation_run_id
+    assert run_id is not None
+    first = repository.read_page_translation(run_id, 1)
+    second = repository.read_page_translation(run_id, 2)
+    assert first.blocks[0].translated_text == "The inflam-"
+    assert second.blocks[0].translated_text == "subsided after treat-"
+    assert second.paragraph_revisions[0].translated_text == "The inflammation"
+    first_prompt_for_third = translator.prompts[3]
+    # Only one general context page, but the entire unfinished paragraph is supplied.
+    repair_context = first_prompt_for_third.split("UNFINISHED_PARAGRAPH_START\n", 1)[1]
+    assert "The inflammation" in repair_context
+    assert '"original_page_number": 1' in repair_context
+    document = pipeline.translate_document(job_dir, settings=settings, translator=translator)
+    assert translator.calls == [1, 2, 3, 3]
+    assert translator.prompts[3] == first_prompt_for_third
+    assert repository.read_page_translation(run_id, 1) == first
+    assert repository.read_page_translation(run_id, 2) == second
+    assert [page.blocks[0].source_text for page in document.pages] == [
+        "Source page 1",
+        "Source page 2",
+        "Source page 3",
+    ]
+    assert [page.blocks[0].translated_text for page in document.pages] == [
+        "Inflammation subsided,",
+        "and the treatment",
+        "was effective.",
+    ]
+    assert repository.read_document(run_id) == document
+    export_settings = MarkdownExportSettings(include_page_comments=False)
+    expected = "Inflammation subsided, and the treatment was effective."
+    assert compile_text(document, export_settings).strip() == expected
+    assert compile_markdown(document, export_settings).strip() == expected
+    assert expected in compile_latex(document, export_settings)
+    marked = compile_markdown(document, MarkdownExportSettings())
+    assert "original-page: 2; continues-from: p0001-b0001" in marked
+    assert "original-page: 3; continues-from: p0002-b0001" in marked
+    replay = pipeline.translate_document(job_dir, settings=settings, translator=translator)
+    assert replay == document
+    assert translator.calls == [1, 2, 3, 3]
+    assert sum(page.provider.output_tokens or 0 for page in replay.pages) == 150
+
+
+class ParagraphAndTableTranslator(ParagraphRepairTranslator):
+    def __init__(self) -> None:
+        super().__init__()
+        self.table_calls = 0
+
+    def translate_page(self, request: PageTranslationRequest) -> ProviderResult:
+        result = super().translate_page(request)
+        if request.original_page_number == 2:
+            assert isinstance(result.payload.blocks[0], GeneratedBlock)
+            result.payload.blocks[0].paragraph_continuation = SegmentContinuation.FROM_PREVIOUS_PAGE
+            result.payload.blocks.append(
+                GeneratedManualInsertionBlock(
+                    order=2,
+                    type=BlockType.TABLE,
+                    manual_insertion_reason=ManualInsertionReason.TABLE,
+                    continuation=SegmentContinuation.COMPLETE,
+                )
+            )
+        return result
+
+    def reconstruct_tables(self, request: TableReconstructionRequest) -> TableReconstructionResult:
+        self.table_calls += 1
+        if self.table_calls == 1:
+            raise TimeoutError("synthetic table failure")
+        return TableReconstructionResult(
+            payload=GeneratedTablePayload(
+                tables=[
+                    GeneratedTableMarkdown(order=2, translated_markdown="| A |\n| --- |\n| 1 |")
+                ]
+            )
+        )
+
+
+def test_paragraph_repair_survives_table_failure_without_repeating_main_pass(
+    tmp_path: Path,
+) -> None:
+    pipeline, job_dir = _prepared_job(tmp_path)
+    translator = ParagraphAndTableTranslator()
+    settings = TranslationSettings(previous_page_context_count=1)
+    with pytest.raises(PageTranslationError):
+        pipeline.translate_document(job_dir, settings=settings, translator=translator)
+    repository = FilesystemArtifactRepository(job_dir)
+    run_id = repository.read_manifest().translation_run_id
+    assert run_id is not None
+    assert repository.read_page_translation(run_id, 1).blocks[0].translated_text == "The inflam-"
+    assert repository.read_page_translation(run_id, 2).paragraph_revisions
+    document = pipeline.translate_document(job_dir, settings=settings, translator=translator)
+    assert translator.calls == [1, 2]
+    assert translator.table_calls == 2
+    assert document.pages[0].blocks[0].translated_text == "The inflammation"
+    assert document.pages[1].table_reconstruction is not None
+    assert (
+        pipeline.translate_document(job_dir, settings=settings, translator=translator) == document
+    )
+    assert translator.calls == [1, 2]
+    assert translator.table_calls == 2

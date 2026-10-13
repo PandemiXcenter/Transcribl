@@ -255,7 +255,11 @@ class GlossariesPanel:
                 json={
                     "name": self.glossary_name.value,
                     "source_language": self.glossary_language.value,
-                    "entries": self.rows,
+                    "entries": [
+                        row
+                        for row in self.rows
+                        if row["source_term"].strip() and row["target_translation"].strip()
+                    ],
                     "expected_revision": self.editing["revision"] if self.editing else None,
                 },
             )

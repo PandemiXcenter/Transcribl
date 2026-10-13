@@ -8,6 +8,7 @@ No real provider adapter is used, including for uploads submitted through the UI
 from __future__ import annotations
 
 import argparse
+import json
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -35,6 +36,7 @@ from transcribl.domain.models import (
     GeneratedPagePayload,
     UncertainTerm,
 )
+from transcribl.domain.models.paragraphs import ParagraphFragmentRevision
 from transcribl.ports.translation import (
     PageTranslationRequest,
     PageTranslator,
@@ -92,7 +94,7 @@ class ReviewTranslator:
 
         if page == 2:
             body(
-                "continues on the second physical page, with a separate editable fragment.",
+                "on the second physical page, with a separate editable fragment.",
                 continuation=SegmentContinuation.FROM_PREVIOUS_PAGE,
             )
         blocks.append(
@@ -146,11 +148,26 @@ class ReviewTranslator:
             )
         if page == 1:
             body(
-                "This linked paragraph starts near the end of physical page one and",
+                "This linked paragraph starts near the end of physical page one and con-",
                 continuation=SegmentContinuation.TO_NEXT_PAGE,
             )
+        repair_context = json.loads(
+            request.prompt.split("UNFINISHED_PARAGRAPH_START\n", 1)[1].split(
+                "\nUNFINISHED_PARAGRAPH_END", 1
+            )[0]
+        )
         return ProviderResult(
-            payload=GeneratedPagePayload(blocks=blocks),
+            payload=GeneratedPagePayload(
+                blocks=blocks,
+                paragraph_revisions=[
+                    ParagraphFragmentRevision(
+                        original_page_number=item["original_page_number"],
+                        order=item["order"],
+                        translated_text=item["translated_text"].removesuffix("con-") + "continues",
+                    )
+                    for item in repair_context
+                ],
+            ),
             input_tokens=7_000,
             output_tokens=1_500,
         )

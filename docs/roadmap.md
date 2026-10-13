@@ -21,8 +21,8 @@ Implemented:
 - immutable translation runs, per-page atomic checkpoints, intermediate
   first-pass table checkpoints, and stage-aware safe resume;
 - canonical JSON dataset and deterministic machine XeLaTeX and Markdown compilers;
-- schema 6.0 footnote-identity/description/ownership and table-reconstruction
-  contracts, with read-only schema 2.0–5.0 compatibility migrations;
+- schema 7.0 paragraph-repair, footnote-identity/description/ownership and table-reconstruction
+  contracts, with read-only schema 2.0–6.0 compatibility migrations;
 - unit, local-integration, and fake-provider end-to-end tests.
 
 Still required before production claims:
@@ -78,7 +78,9 @@ Implemented:
 - exact ordered table emission with an invisible `[H!]` placement anchor;
 - TOML-configured context from 0–10 finalized preceding same-run machine page
   translations (default 2), shared by primary and table prompts and constrained
-  to current-page-only output;
+  to current-page output except for scoped unfinished-paragraph revisions;
+- whole-paragraph next-page repair of split words and seams, replayable from later
+  checkpoints without rewriting earlier checkpoints, with footnote-anchor safety;
 - named local glossaries with source-language filtering, per-job selection, legacy
   language assignment and immutable term snapshots;
 - pre-submission estimates learned from completed page usage, including table

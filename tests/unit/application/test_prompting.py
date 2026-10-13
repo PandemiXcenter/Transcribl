@@ -104,7 +104,9 @@ def test_prompt_contains_resolved_settings_and_delimited_page_markdown() -> None
     assert "immediately preceding physical page" in prompt
     assert "mentally combine it with the current source fragment" in prompt
     assert "direct single-space join" in prompt
-    assert "Do not repeat\n   preceding-page words" in prompt
+    assert "retranslate the ENTIRE connected paragraph" in prompt
+    assert "paragraph_revisions" in prompt
+    assert "The inflammation" in prompt
     assert "[[FOOTNOTE:<id>]]" in prompt
     assert "entrypoint_token" in prompt
     assert "fn-p<START_PAGE>-n<SEQUENCE>" in prompt

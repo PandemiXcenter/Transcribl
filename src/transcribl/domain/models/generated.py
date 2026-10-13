@@ -25,6 +25,7 @@ from transcribl.domain.models.block_rules import (
     _continues_to_next,
     _validate_manual_reason,
 )
+from transcribl.domain.models.paragraphs import ParagraphFragmentRevision
 
 OrdinaryBlockType: TypeAlias = Literal[  # noqa: UP040
     BlockType.TITLE,
@@ -117,6 +118,7 @@ class GeneratedPagePayload(ContractModel):
 
     detected_printed_page_label: str | None = None
     blocks: list[GeneratedBlockVariant] = Field(default_factory=list)
+    paragraph_revisions: list[ParagraphFragmentRevision] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def block_order_must_be_unique_and_contiguous(self) -> Self:
@@ -137,6 +139,8 @@ class GeneratedPagePayload(ContractModel):
             if isinstance(block, GeneratedTextBlock)
             and _continues_to_next(block.paragraph_continuation)
         ]
+        if self.paragraph_revisions and not incoming:
+            raise ValueError("paragraph revisions require an incoming body continuation")
         if incoming and incoming != body_blocks[:1]:
             raise ValueError("only the first body block may continue a previous-page paragraph")
         if outgoing and outgoing != body_blocks[-1:]:

@@ -20,6 +20,8 @@ downloads do not.
 In **Articles**, choose **Review sample A.pdf** or **Review sample B.pdf**. Each
 has two readable source pages, edge markers for panning, enough translated text to
 scroll, a paragraph spanning the physical page boundary, and one owned footnote.
+The spanning paragraph repairs a synthetic page-end `con-` into `continues`;
+a small clickable line marks the page shift without interrupting the prose.
 The note's owner starts with `😀 Evidence`; its marker belongs at Unicode offset
 10. “olde” has two unresolved annotated occurrences and “recorded” has only one.
 The two article titles also make stale responses from rapid article switches

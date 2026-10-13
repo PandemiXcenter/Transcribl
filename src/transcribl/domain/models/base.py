@@ -9,7 +9,7 @@ from pydantic import (
     StringConstraints,
 )
 
-SCHEMA_VERSION: Literal["6.0"] = "6.0"
+SCHEMA_VERSION: Literal["7.0"] = "7.0"
 
 Sha256 = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
 

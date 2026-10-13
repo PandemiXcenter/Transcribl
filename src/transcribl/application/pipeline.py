@@ -12,6 +12,7 @@ from transcribl.application.prompting import (
     TABLE_PROMPT_VERSION,
 )
 from transcribl.application.translation.checkpoints import translate_page_checkpoint
+from transcribl.application.translation.paragraph_repair import apply_paragraph_revisions
 from transcribl.application.translation.provenance import validate_document_for_manifest
 from transcribl.domain.enums import (
     JobStatus,
@@ -95,16 +96,17 @@ class TranslationPipeline:
 
         translated_pages: list[PageTranslation] = []
         for page in manifest.pages:
-            translated_pages.append(
-                translate_page_checkpoint(
-                    repository,
-                    manifest,
-                    page,
-                    settings,
-                    translator,
-                    translated_pages,
-                    translation_run_id,
-                )
+            current = translate_page_checkpoint(
+                repository,
+                manifest,
+                page,
+                settings,
+                translator,
+                translated_pages,
+                translation_run_id,
+            )
+            translated_pages = apply_paragraph_revisions(
+                translated_pages, current, enabled=settings.previous_page_context_count > 0
             )
 
         document = DocumentTranslation(

@@ -171,9 +171,11 @@ Markdown.
   preceding, same-run machine page translations. It is a read-only projection of
   page identity and ordered block content: no prior images, editorial revisions,
   provider metadata, IDs, hashes, tokens, or timestamps. Prompts must require
-  current-page-only output and must never repeat, revise, or move prior content.
-  This context can help interpret split words and continuations on the current
-  page; it cannot retroactively repair a previously finalized page.
+  current-page blocks. The sole exception is scoped `paragraph_revisions` for
+  the entire linked unfinished paragraph supplied in its own delimiter when
+  context is enabled. Store repairs in the later checkpoint and replay them into
+  the canonical assembly; never overwrite earlier checkpoints or completed runs.
+  Preserve source text, page/block identity, note entrypoints and review history.
 - Every new body block carries `paragraph_continuation`; non-body text uses null.
   Only the first main-flow body may continue from the preceding physical page and
   only the final main-flow body may remain unfinished. When the next page confirms
@@ -292,7 +294,7 @@ library when adequate.
 
 ### Persisted schema or block taxonomy
 
-- The current core schema is 5.0. Supported schema 2.0, 3.0, and 4.0 reads migrate only
+- The current core schema is 7.0. Supported schema 2.0 through 6.0 reads migrate only
   in memory: schema 2.0 translated tables remain legacy translated tables and
   schema 3.0 manual table placeholders remain legacy manual tables. Do not
   rewrite or silently schedule either form for reconstruction. Migrated
@@ -309,10 +311,11 @@ library when adequate.
 - Edit the resource under `prompts/`, not an inline provider string.
 - Bump `PROMPT_VERSION` for a semantic main-pass change and
   `TABLE_PROMPT_VERSION` for a semantic table-pass change. The current contracts
-  are `translate-page-v11` and `reconstruct-tables-v3`.
+  are `translate-page-v12` and `reconstruct-tables-v3`.
 - Keep page Markdown visibly delimited as document data.
 - Delimit any previous finalized page projection as untrusted, read-only context
-  and require current-page-only output.
+  and require current-page blocks. Allow only the scoped unfinished-paragraph
+  repair contract to revise earlier translated fragments.
 - Confirm both relevant fingerprints change and add/update prompt tests.
 - Never include secrets, prior page images/revisions/provider metadata, or
   unrelated document pages.
@@ -511,7 +514,8 @@ runs.
   responses.
 - The interface must continue to disclose that the configured provider receives
   current-page images, complete extracted page text, and the configured
-  read-only projection of prior finalized machine translations. A table-bearing
+  prior-page context and, when enabled, the entire linked unfinished paragraph
+  for scoped repair. A table-bearing
   page sends the current image/text twice.
 - The source PDF is copied to a short-lived immutable extraction snapshot, hashed
   there, and never copied into the durable job artifact directory.

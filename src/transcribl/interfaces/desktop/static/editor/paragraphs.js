@@ -88,9 +88,10 @@ export function makeParagraphGroup(group) {
       const boundary = createElement(
         "button",
         "paragraph-page-boundary page-sync-anchor",
-        `Physical page ${page.original_page_number}`,
+        "│",
       );
       boundary.type = "button";
+      boundary.title = `Physical page ${page.original_page_number}`;
       boundary.contentEditable = "false";
       boundary.dataset.action = "show-paragraph-page";
       boundary.dataset.pageNumber = asText(page.original_page_number);

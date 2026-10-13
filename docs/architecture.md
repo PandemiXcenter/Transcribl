@@ -155,7 +155,10 @@ to avoid retaining cleared key input values.
 
 Settings opens from the top-right gear, outside the three main tabs. Saved
 defaults are separate from per-job selections. Strict `WorkbenchPreferences`
-are initialized from TOML and saved atomically to `.settings.toml` under the
+initialize Translate's model on each window. Saving or reloading Settings also
+selects the saved default model in the current Translate form, including after a
+per-job override; the model-change handler updates provider routing and estimates.
+Preferences are initialized from TOML and saved atomically to `.settings.toml` under the
 artifact root via a repository port. `PUT /api/settings` requires CSRF and an
 optimistic revision, validates model/style/glossary choices, and never accepts
 secrets. The API resolves a fresh config copy when a job is submitted; active
@@ -164,7 +167,7 @@ must be replaced explicitly; it is never silently substituted on API submission.
 
 The selected style name and exact instructions are additive optional fields in
 `TranslationSettings`; old documents remain readable. Custom styles use the
-`custom` enum value plus their saved name. Prompt contracts `translate-page-v11`
+`custom` enum value plus their saved name. Prompt contracts `translate-page-v12`
 and `reconstruct-tables-v3` apply style instructions within the existing factual
 and structural constraints. The Settings prompt viewer reads the same versioned
 resources used by the pipeline. It shows the instructions verbatim and explains
@@ -317,7 +320,7 @@ Never overload the phrase “page number”:
 
 Every request contains exactly one current-page PNG, that page's complete
 Markdown, and the fully resolved translation settings. The primary pass uses
-`translate-page-v11`. When that pass tags at least one table or table-like region,
+`translate-page-v12`. When that pass tags at least one table or table-like region,
 the pipeline immediately makes one additional batched request for that page using
 `reconstruct-tables-v3`; it sends the same PNG and complete page MarkItDown/OCR,
 plus the first-pass segmentation and exact table targets. Multiple table regions
@@ -365,7 +368,7 @@ provider metadata, block IDs, hashes, token counts, and timestamps. The current
 page's full image and Markdown remain the only raw page evidence in each request.
 
 The projection is visibly delimited and the prompt requires current-page-only
-output: prior content must not be repeated, revised, or moved. Every current
+blocks. Only the separately scoped `paragraph_revisions` may revise earlier text. Every current
 `body` block carries the required `paragraph_continuation` state; non-body text
 uses null. The next page decides whether its first body block continues the
 preceding page's final body block. When confirmed, the pipeline—not the model—adds
@@ -373,19 +376,36 @@ preceding page's final body block. When confirmed, the pipeline—not the model�
 body can continue from a prior page and only the last main-flow body can remain
 unfinished at the next boundary.
 
-Canonical fragments remain page-local, independently checkpointed, and separately
-revisable. The prompt requires the current fragment to form a seamless grammatical
-join without repeating prior content. A derived paragraph projection follows the
-trusted links across effective body blocks. Review renders that projection as one
-paragraph with immutable inline physical-page boundaries; one group command
-preflights every fragment and then appends one ordinary revision per fragment.
-Markdown, plain-text, and LaTeX exporters consume the same projection. LaTeX emits
-exactly one final `\par`; with page comments enabled, each new physical-page marker
-is inline at the join and names the linked prior block. The current page can confirm
-continuity but cannot retroactively revise the already persisted prior fragment.
-Because prior finalized output is embedded in the exact prompt, context content
-and window size participate in checkpoint identity while page artifacts remain
-independently serializable and resumable.
+Canonical fragments retain physical-page identity and source text. With context
+enabled, the primary prompt additionally supplies `UNFINISHED_PARAGRAPH`: every
+fragment in the linked unfinished tail, even beyond the general context window.
+This projection contains page/order, source text, current translation, uncertainties
+and existing semantic footnote entrypoint tokens, never prior images or reviews.
+Zero context disables it. The provider can return `paragraph_revisions` covering
+exactly that entire earlier chain, alongside the current page's normal first body
+block. It may reword the whole paragraph, complete broken words and move a split
+to a natural word boundary, while retaining nonempty page-associated fragments.
+It cannot change source text, identities, block types, links or unrelated content.
+
+`translation/paragraph_repair.py` validates scope against trusted continuation
+links and requires every existing note token exactly once in its original fragment.
+It replaces uncertainty annotations with those attached to the revised wording,
+strips the tokens and updates Unicode anchors, including continued footnotes.
+Repairs are retained in the later page's checkpoint and replayed into an in-memory
+copy of preceding blocks only after that page finishes. Earlier checkpoint files
+remain unchanged. Table failures resume from the saved first pass including its
+repair, and subsequent prompts use the replayed wording. Canonical assembly writes
+these repaired blocks to `document.json` together with the repair provenance.
+The next page's provider metadata accounts for repair tokens; no extra API pass is
+required. The exact repair context participates in the primary fingerprint, which
+also binds the table fingerprint. Completed runs and append-only reviews are never
+retroactively modified. Schema 7.0 reads schema 6.0 without inferring any repair.
+
+A derived paragraph projection follows trusted links across effective body blocks.
+Review renders it as one paragraph with small clickable physical-page boundary
+lines; one group command preflights every fragment and appends one revision per
+fragment. Markdown, plain text and LaTeX use the same repaired canonical wording.
+LaTeX emits one final `\par`; optional page comments remain inline at joins.
 
 ### Historical-page segment policy
 
@@ -708,24 +728,25 @@ not verify a live provider path or a packaged native application.
 - Remote use: design authentication, authorization, CSRF/origin policy, encrypted
   secret storage, retention, and deployment explicitly before allowing a
   non-loopback host.
-- Broader or forward-looking cross-page context: preserve current-page-only raw
-  evidence and output, explicitly version/fingerprint the new projection, and
-  design how a future page could safely revise an already finalized prior page.
+- Forward-looking cross-page context: explicitly version/fingerprint any new
+  evidence projection. The implemented backward repair is restricted to the
+  linked unfinished paragraph and never mutates completed runs.
 - Schema evolution: bump `SCHEMA_VERSION` and provide migration or clear
   incompatibility handling.
 - Prompt evolution: update the applicable resource, bump `PROMPT_VERSION` and/or
   `TABLE_PROMPT_VERSION`, and add checkpoint-invalidation tests.
 
-New core persisted artifacts use schema version 6.0 because stable footnote
+New core persisted artifacts use schema version 7.0 because paragraph repairs,
+stable footnote
 identity, descriptions, cross-page links, ownership, reconstructed-table handling,
 and per-pass provenance are canonical. Filesystem reads apply explicit in-memory
-schema 2.0 through 5.0 compatibility migrations without rewriting immutable
+schema 2.0 through 6.0 compatibility migrations without rewriting immutable
 artifacts. Legacy footnotes retain their text but receive synthetic per-block IDs,
 an explicit legacy description, and unknown ownership where applicable; their
 cross-page relationships are not guessed. Schema 2.0 translated tables
 remain marked as legacy translated tables; schema 3.0 manual table placeholders
 remain marked as legacy manual
-tables. Neither is presented as a schema 6.0 reconstruction or automatically
+tables. Neither is presented as a current-schema reconstruction or automatically
 sent through the new follow-up. Translated figures are rejected because they were
 never valid schema 2.0 blocks. Version 1.0 manifests and translations remain
 rejected; no run identity is inferred for them.
@@ -763,6 +784,11 @@ Its repository port is implemented by a filesystem catalog at
 Save/delete operations compare the expected revision while holding that lock,
 preventing two browser sessions from silently overwriting the same revision.
 This is single-process local coordination, not multi-process storage.
+
+The desktop save command filters rows with a blank source or target before API
+validation, then renders the saved rows only after success. Failed saves retain
+the draft. Named glossaries may contain zero entries; individual persisted entries
+still require both terms, and duplicate/length/revision validation remains strict.
 
 The HTTP interface offers GET/POST `/api/glossaries` and PUT/DELETE
 `/api/glossaries/{id}`. GET supports a `source_language` filter; matching trims

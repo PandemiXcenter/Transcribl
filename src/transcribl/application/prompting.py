@@ -4,16 +4,17 @@ from functools import lru_cache
 from hashlib import sha256
 from importlib.resources import files
 
+from transcribl.application.translation.paragraph_repair import paragraph_repair_context
 from transcribl.domain.enums import BlockType, SegmentHandling
 from transcribl.domain.models import PageTranslation, TranslationSettings
 
-PROMPT_VERSION = "translate-page-v11"
+PROMPT_VERSION = "translate-page-v12"
 TABLE_PROMPT_VERSION = "reconstruct-tables-v3"
 
 
 @lru_cache(maxsize=1)
 def _prompt_preamble() -> str:
-    resource = files("transcribl.prompts").joinpath("translate_page_v11.md")
+    resource = files("transcribl.prompts").joinpath("translate_page_v12.md")
     return resource.read_text(encoding="utf-8").strip()
 
 
@@ -44,6 +45,11 @@ def build_page_prompt(
         indent=2,
         sort_keys=True,
     )
+    repair_context = json.dumps(
+        paragraph_repair_context(previous_pages) if settings.previous_page_context_count else [],
+        ensure_ascii=False,
+        indent=2,
+    )
     return (
         f"{_prompt_preamble()}\n\n"
         f"Prompt version: {PROMPT_VERSION}\n"
@@ -51,6 +57,9 @@ def build_page_prompt(
         f"Table follow-up prompt version: {TABLE_PROMPT_VERSION}\n"
         f"Resolved translation settings:\n{resolved_settings}\n\n"
         f"{_previous_page_context(previous_pages, settings)}\n\n"
+        "UNFINISHED_PARAGRAPH_START\n"
+        f"{repair_context}\n"
+        "UNFINISHED_PARAGRAPH_END\n\n"
         "SOURCE_MARKDOWN_START\n"
         f"{markdown}\n"
         "SOURCE_MARKDOWN_END\n"

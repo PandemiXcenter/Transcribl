@@ -84,24 +84,35 @@ pages in the same run. `translation.previous_page_context_count` controls the
 window from 0 through 10; the checked-in default is 2. The projection contains
 page identity and ordered source/translated block content, but no prior page
 images, editorial revisions, provider metadata, IDs, hashes, tokens, or
-timestamps. It is delimited as untrusted, read-only context, and the model must
-return only current-page content.
+timestamps. It is delimited as untrusted, read-only context. Ordinary output blocks
+contain current-page content; the unfinished-paragraph repair below is the only
+exception for preceding text.
 
 For body text, the primary model must populate a `paragraph_continuation` state.
 On the next physical page it uses the prior projection to decide whether the
 first body block continues the preceding page's final body block. A confirmed
 continuation receives a pipeline-owned `continues_from_block_id` link. Canonical
-blocks remain page-local and independently revisable. The model is instructed to
-word the current fragment so a direct join is grammatically seamless. Review
-groups the linked fragments into one visual paragraph with fixed inline page
-markers and one Save/Validate action, while recording one append-only revision per
-physical-page fragment. Markdown, text, and LaTeX exports emit one paragraph; page
-comments remain inline at each join. This cannot retroactively rewrite the
-preceding machine fragment.
+blocks retain physical-page identity and original source wording. When context is
+enabled, the primary pass also receives the entire linked unfinished paragraph,
+even if it spans more pages than the general context window. The next page's model
+may revise all its earlier translated fragments, complete split words and remove
+typographic page-end hyphens. Genuine lexical hyphens remain. It returns revised
+fragments at word boundaries so their single-space join is one coherent paragraph.
+Existing footnote entrypoints must be preserved, and uncertainty annotations are
+updated for the revised wording. Context count zero disables these repairs.
+
+The later page's checkpoint stores the scoped repair; earlier checkpoints are
+never rewritten by it. Ordered replay reconstructs the revised machine document
+before publication, so retries preserve both wording and cache identity. Completed
+runs and editorial revisions remain unchanged. Review groups linked fragments
+into one paragraph with a small clickable page-boundary line and one Save/Validate
+action. Markdown, text and LaTeX exports use the revised paragraph; optional page
+comments remain inline. Existing translations require a new translation run to
+receive this model-assisted repair.
 
 The same context can resolve a word, sentence, heading, footnote, or table
 continuation that enters the current page. The main contract is versioned as
-`translate-page-v11`; the table contract is `reconstruct-tables-v3`.
+`translate-page-v12`; the table contract is `reconstruct-tables-v3`.
 
 ## Quick start: desktop application
 
@@ -157,8 +168,10 @@ host/port and use the same application services.
   (initially **None**), **Price currency** (initially **DKK**), and **API Keys**.
   **Save settings** persists non-secret preferences atomically in `.settings.toml`
   under the configured artifact root.
-  Defaults survive restarts; existing runs and deliberate per-job overrides are
-  unchanged. **Reload saved settings** discards unsaved settings edits.
+  Defaults survive restarts. Saving or reloading Settings selects the saved default
+  model in **Translate**, replacing its previous model selection. You can then
+  choose a different model for an individual translation. Existing runs retain
+  their original settings. **Reload saved settings** discards unsaved settings edits.
   **Advanced settings** contains thinking levels for each provider, default
   continuity pages, image DPI, uncertainty marking, and Auto continue. It also
   exposes the verbatim, versioned translation/table instructions and resolved
@@ -217,7 +230,8 @@ than leaving `**` markers in the typeset document.
 For each request, the configured provider receives one current-page image and
 that page's complete extracted Markdown. A table-bearing page therefore makes a
 second request with the same current-page evidence. Requests can also include the
-configured read-only projection of prior finalized machine translations. Source
+configured prior-page context and, when enabled, the full unfinished paragraph
+for repair. Source
 files, canonical translations, and editorial revisions remain in the configured
 local artifact directory.
 
@@ -471,6 +485,9 @@ and `web.max_term_characters` limit each glossary, while the new required
 `web.max_glossary_name_characters` limits its name (100 in the default TOML).
 Add that setting when updating an older personal TOML file.
 
+Saving in Glossaries removes rows with a blank source term or translation,
+including whitespace-only values. A glossary may be saved with no entries.
+
 Revision checks reject stale saves, deletes, and job selections. **Refresh** in
 Glossaries loads the latest saved versions; unsaved drafts are protected by a
 confirmation before switching or refreshing. The resolved mapping dictionary is
@@ -568,10 +585,11 @@ preparations are retained until a future explicit cleanup policy exists. Forced
 preparation preserves the ordered translation-run index but clears the active run
 so the next translation receives a new identity.
 
-New core artifacts use schema version 6.0 for cross-page footnote identity,
+New core artifacts use schema version 7.0 for scoped paragraph repairs in addition
+to cross-page footnote identity,
 description, fragment linkage, and structured ownership in addition to
 table-reconstruction handling and per-pass provenance. The filesystem reader
-validates and upgrades supported schema 2.0 through 5.0 artifacts in memory
+validates and upgrades supported schema 2.0 through 6.0 artifacts in memory
 without rewriting immutable files. Schema
 2.0 translated tables remain explicitly marked legacy translated tables; schema
 3.0 manual table placeholders remain explicitly marked legacy manual tables.
@@ -667,8 +685,8 @@ The live Gemini, OpenAI, and Anthropic paths have not been verified by the autom
 
 - Translation is sequential. Only finalized preceding same-run page translations
   are available as context; no following-page image/text is sent. The next page
-  can confirm and link a paragraph continuation, but it cannot rewrite the
-  preceding page's already persisted fragment.
+  can revise the linked unfinished paragraph using the available source text and
+  current image; it cannot inspect prior images or revise unrelated paragraphs.
 - Block boundaries and types are model decisions and may vary between runs.
 - Reconstructed tables are model-produced modern GFM structures, not claimed
   cell-for-cell source transcriptions, and still require editorial review.

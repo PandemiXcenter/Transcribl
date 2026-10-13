@@ -23,13 +23,14 @@ from transcribl.domain.models.base import (
 from transcribl.domain.models.block_rules import _continues_from_previous, _continues_to_next
 from transcribl.domain.models.blocks import TranslatedBlock
 from transcribl.domain.models.extraction import ArtifactRef
+from transcribl.domain.models.paragraphs import ParagraphFragmentRevision
 from transcribl.domain.models.provenance import ProviderMetadata, TableReconstructionMetadata
 
 
 class PageTranslation(ContractModel):
     """One independently retriable and cacheable page result."""
 
-    schema_version: Literal["6.0"] = SCHEMA_VERSION
+    schema_version: Literal["7.0"] = SCHEMA_VERSION
     translation_run_id: TranslationRunId
     original_page_number: int = Field(ge=1)
     pdf_page_label: str | None = None
@@ -41,6 +42,7 @@ class PageTranslation(ContractModel):
     source_markdown_artifact: ArtifactRef
     source_image: ArtifactRef
     blocks: list[TranslatedBlock] = Field(default_factory=list)
+    paragraph_revisions: list[ParagraphFragmentRevision] = Field(default_factory=list)
     input_fingerprint: Sha256
     provider: ProviderMetadata
     table_reconstruction: TableReconstructionMetadata | None = None
@@ -60,6 +62,14 @@ class PageTranslation(ContractModel):
         outgoing = [
             block for block in body_blocks if _continues_to_next(block.paragraph_continuation)
         ]
+        if self.paragraph_revisions:
+            if not incoming:
+                raise ValueError("paragraph revisions require an incoming body continuation")
+            targets = [(item.original_page_number, item.order) for item in self.paragraph_revisions]
+            if targets != sorted(set(targets)) or any(
+                number >= self.original_page_number for number, _ in targets
+            ):
+                raise ValueError("paragraph revisions must name unique earlier fragments in order")
         if incoming and incoming != body_blocks[:1]:
             raise ValueError("only the first body block may continue a previous-page paragraph")
         if outgoing and outgoing != body_blocks[-1:]:

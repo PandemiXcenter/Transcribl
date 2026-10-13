@@ -27,7 +27,7 @@ from transcribl.domain.models.settings import MarkdownExportSettings, Translatio
 class JobManifest(ContractModel):
     """Mutable run index; page artifacts remain the recovery source of truth."""
 
-    schema_version: Literal["6.0"] = SCHEMA_VERSION
+    schema_version: Literal["7.0"] = SCHEMA_VERSION
     job_id: NonEmptyText
     preparation_id: NonEmptyText
     document_id: Sha256
@@ -69,7 +69,7 @@ class JobManifest(ContractModel):
 
 
 class PageFailure(ContractModel):
-    schema_version: Literal["6.0"] = SCHEMA_VERSION
+    schema_version: Literal["7.0"] = SCHEMA_VERSION
     original_page_number: int = Field(ge=1)
     input_fingerprint: Sha256 | None = None
     stage: Literal["page_translation", "table_reconstruction"] = "page_translation"

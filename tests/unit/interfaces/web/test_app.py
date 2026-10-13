@@ -939,7 +939,11 @@ def test_glossary_routes_persist_selection_and_protect_mutations(tmp_path: Path)
     "command",
     [
         {"source_language": "Danish", "name": "Bad", "entries": [], "unknown": True},
-        {"source_language": "Danish", "name": "Bad", "entries": []},
+        {
+            "source_language": "Danish",
+            "name": "Bad",
+            "entries": [{"source_term": "", "target_translation": "B"}],
+        },
         {
             "source_language": "Danish",
             "name": "N" * 101,

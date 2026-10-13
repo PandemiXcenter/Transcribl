@@ -24,7 +24,7 @@ class TranslationPanel:
         self.job: dict[str, Any] | None = None
         self.busy = False
         self.polling = False
-        self.model = workbench.config.provider.selected.model
+        self.model = workbench.preferences.default_model
         self.style = self.workbench.preferences.default_style
 
     def translation_controls(self) -> None:
@@ -170,7 +170,8 @@ class TranslationPanel:
                 )
                 ui.label(
                     "The selected provider receives each page image and its extracted text, "
-                    "plus the selected number of prior finalized pages. Table pages are "
+                    "plus the selected prior-page context and full unfinished paragraph when "
+                    "context is enabled. Table pages are "
                     "sent twice. Files and review edits stay local."
                 ).classes("workbench-subtle")
             with ui.card().classes("workbench-card") as self.progress_card:

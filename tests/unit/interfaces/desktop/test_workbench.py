@@ -146,6 +146,64 @@ async def test_nicegui_glossary_language_settings_and_submission(tmp_path: Path)
 
 
 @pytest.mark.asyncio
+async def test_glossary_save_discards_blank_rows_and_can_clear_all_terms(tmp_path: Path) -> None:
+    config = config_for(tmp_path)
+    api = create_app(
+        config,
+        job_manager=cast(JobManager, FakeManager()),
+        secret_store=DotenvSecretStore(tmp_path / ".env"),
+    )
+    windows: list[Workbench] = []
+
+    async def root() -> None:
+        session = DesktopSession(api)
+        windows.append(Workbench(config, session, await session.initialize()))
+
+    async with user_simulation(root) as user:
+        user.javascript_rules[re.compile(".*", re.S)] = lambda _: None
+        await user.open("/")
+        workbench = windows[0]
+        with user:
+            panel = workbench.glossaries
+            await panel.refresh_glossaries()
+            workbench.tabs.set_value("Glossaries")
+            panel.glossary_name.set_value("Historical terms")
+            complete = {"source_term": "a\u030a", "target_translation": "Å"}
+            blank_rows = [
+                {"source_term": "", "target_translation": ""},
+                {"source_term": "\t \n", "target_translation": "Target"},
+                {"source_term": "Source", "target_translation": "\u00a0 "},
+            ]
+            panel.rows = [blank_rows[0], complete, *blank_rows[1:]]
+            await panel.save_glossary()
+            assert panel.glossary_message.text == "Glossary saved."
+            assert panel.rows == [complete]
+            assert [row["row_id"] for row in panel.term_table.rows] == [0]
+            assert panel.editing is not None and panel.editing["revision"] == 1
+            await panel.refresh_glossaries()
+            assert panel.rows == [complete]
+
+            # Failed validation must retain the draft, including its blank rows.
+            draft = [complete, dict(complete), *blank_rows]
+            panel.rows = list(draft)
+            panel.mark_dirty()
+            await panel.save_glossary()
+            assert panel.glossary_message.text != "Glossary saved."
+            assert panel.rows == draft and panel.dirty
+            assert panel.editing["revision"] == 1
+
+            panel.rows = list(blank_rows)
+            await panel.save_glossary()
+            assert panel.glossary_message.text == "Glossary saved."
+            assert panel.rows == panel.term_table.rows == []
+            assert panel.editing["revision"] == 2
+            assert not panel.dirty
+            await panel.refresh_glossaries()
+            assert panel.rows == []
+            await workbench.close()
+
+
+@pytest.mark.asyncio
 async def test_api_keys_dialog_manages_providers_independently(tmp_path: Path) -> None:
     config = config_for(tmp_path)
     api = create_app(
@@ -235,12 +293,16 @@ async def test_settings_icon_custom_styles_and_separate_defaults(tmp_path: Path)
             workbench.settings.thinking["openai"].set_value("high")
             await workbench.settings.save_settings()
             assert workbench.settings.settings_revision == 1
-            assert workbench.translation.job_model.value == "claude-sonnet-5-5"
+            assert workbench.translation.job_model.value == "gpt-6-luna"
+            assert workbench.translation.model == "gpt-6-luna"
             assert workbench.translation.job_style.value == "Historical prose"
             assert workbench.preferences.default_model == "gpt-6-luna"
             workbench.settings.settings_model.set_value("gpt-6-astra")
+            workbench.translation.job_model.set_value("claude-sonnet-5-5")
             await workbench.settings.reload_settings()
             assert workbench.settings.settings_model.value == "gpt-6-luna"
+            assert workbench.translation.job_model.value == "gpt-6-luna"
+            assert workbench.translation.model == "gpt-6-luna"
             assert (
                 workbench.settings.style_prompt.value
                 == "Preserve historical idioms and quotations."
@@ -253,6 +315,59 @@ async def test_settings_icon_custom_styles_and_separate_defaults(tmp_path: Path)
                 workbench.settings.style_prompt.value == config.workbench.style_prompts["balanced"]
             )
             await workbench.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "model,provider", [("gpt-6-luna", "openai"), ("claude-opus-5-5", "anthropic")]
+)
+async def test_default_model_is_selected_after_save_and_restart_and_submitted(
+    tmp_path: Path, model: str, provider: str
+) -> None:
+    config = config_for(tmp_path)
+    manager = FakeManager()
+    windows: list[Workbench] = []
+
+    async def root() -> None:
+        # Rebuild the backend too, so the second window must read the saved file.
+        api = create_app(
+            config,
+            job_manager=cast(JobManager, manager),
+            secret_store=DotenvSecretStore(tmp_path / ".env"),
+        )
+        session = DesktopSession(api)
+        windows.append(Workbench(config, session, await session.initialize()))
+
+    async with user_simulation(root) as user:
+        user.javascript_rules[re.compile(".*", re.S)] = lambda _: None
+        await user.open("/")
+        with user:
+            first = windows[-1]
+            first.translation.job_model.set_value("gpt-6-astra")
+            first.settings.settings_model.set_value(model)
+            await first.settings.save_settings()
+            assert first.translation.job_model.value == model
+            assert first.translation.model == model
+            await first.close()
+        await user.open("/")
+        with user:
+            restarted = windows[-1]
+            assert restarted is not first
+            assert restarted.settings.settings_model.value == model
+            assert restarted.translation.job_model.value == model
+            assert restarted.translation.model == model
+            await restarted.glossaries.refresh_glossaries()
+            restarted.session.keys[provider] = "test-ephemeral-key"
+            restarted.translation.file = SmallFileUpload(
+                name="study.pdf", content_type="application/pdf", _data=b"%PDF-1.7\nsynthetic"
+            )
+            await restarted.translation.start_translation()
+            assert len(manager.submissions) == 1
+            submitted = manager.submissions[0]
+            assert submitted["runtime_config"].provider.name == provider
+            assert submitted["runtime_config"].provider.selected.model == model
+            assert submitted["api_key"].get_secret_value() == "test-ephemeral-key"
+            await restarted.close()
 
 
 def test_editor_component_keeps_complete_review_and_delegated_events() -> None:

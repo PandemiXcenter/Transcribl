@@ -64,8 +64,7 @@ class GlossaryService:
             )
         except ValidationError:
             raise GlossaryError(
-                "Use a name, source language and at least one complete mapping, "
-                "with unique source terms"
+                "Use a name, source language and complete mappings with unique source terms"
             ) from None
         if glossary.source_language is None:
             raise GlossaryError("Choose a source language")
